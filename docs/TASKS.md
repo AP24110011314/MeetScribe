@@ -43,11 +43,11 @@ Work one phase at a time. Tick boxes as you finish. Each phase ends with tests p
 - [x] Tests with a fake LLM client and golden transcripts
 
 ## Phase 6 — Notes UI
-- [ ] Meeting detail page: summary, key points, decisions, action items table, transcript with clickable timestamps, audio player seeking
-- [ ] Edit/complete/delete action items (optimistic updates)
-- [ ] Meetings list with search, status badges, pagination
-- [ ] Global "My action items" page
-- [ ] Empty, loading, and error states everywhere
+- [x] Meeting detail page: summary, key points, decisions, action items table, transcript with clickable timestamps, audio player seeking
+- [x] Edit/complete/delete action items (optimistic updates)
+- [x] Meetings list with search, status badges, pagination
+- [x] Global "My action items" page
+- [x] Empty, loading, and error states everywhere
 
 ## Phase 7 — Export, retry, delete
 - [ ] Markdown and PDF export (WeasyPrint or reportlab)
