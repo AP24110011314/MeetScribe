@@ -76,3 +76,38 @@ the same S3 API (presigned PUT/GET, head_object, delete) the app relies on. Cons
     `http://localhost:9000` (browser-facing, same as before).
   - Production is unaffected: `S3_ENDPOINT_URL=""` uses real AWS S3 (D11).
   - S3 access still goes through `StorageService` only, so tests use moto regardless.
+
+## D14 — Auth libraries: passlib+bcrypt, PyJWT (Phase 1)
+ARCHITECTURE.md says "argon2/bcrypt" hashing. Chose bcrypt via `passlib[bcrypt]` (the
+most widely used, no native build issues) plus `PyJWT` for tokens (lighter than
+python-jose, no cryptography pin conflicts). `bcrypt` is pinned `<4.1` because passlib
+1.7.4 reads `bcrypt.__about__`, which 4.1 removed.
+
+## D15 — Tests run against a real Postgres test database (Phase 1)
+The schema uses Postgres-only features (native enums, `tsvector` generated columns,
+`gen_random_uuid()`), so SQLite cannot stand in. Backend tests use a dedicated
+`meetscribe_test` database (`TEST_DATABASE_URL`, default via local compose Postgres).
+Each test gets a fresh engine bound to its own event loop with `NullPool`, and tables are
+truncated before each test. The schema is created by `Base.metadata.create_all`; the
+migration itself is verified separately with `alembic upgrade head`.
+
+## D16 — JWT settings (Phase 1)
+Access tokens 15 min, refresh tokens 7 days, HS256, per ARCHITECTURE.md. Claims:
+`sub` (user id), `type` (`access`/`refresh`), `iat`, `exp`. A token's `type` is checked on
+use, so a refresh token cannot be replayed as an access token (tested).
+
+## D17 — API errors use a typed `APIError` + handlers (Phase 1)
+docs/API.md requires `{"detail", "code"}`. Added `app/core/errors.py` (`APIError`) with a
+FastAPI exception handler rendering that shape, plus a catch-all 500 handler returning
+`INTERNAL_ERROR`. Pydantic validation errors still use FastAPI's default 422 shape.
+
+## D18 — Frontend auth: token store, context, refresh-on-401 (Phase 1)
+Tokens in `localStorage` (consistent with D3). `src/api/client.ts` attaches the access
+token and, on the first 401, calls `/auth/refresh` once and retries; a failed refresh
+clears tokens. `AuthContext`/`AuthProvider` split into two files so the provider file
+exports only components (react-refresh rule).
+
+## D19 — jsdom localStorage shim in tests (Phase 1)
+jsdom 25 under Node 26 does not expose `localStorage`, which broke token-store tests. The
+Vitest setup installs a minimal in-memory `Storage` shim only when the global is missing.
+Browsers are unaffected.

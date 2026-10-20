@@ -11,10 +11,10 @@ Work one phase at a time. Tick boxes as you finish. Each phase ends with tests p
 - [x] GitHub Actions CI: backend lint/test, frontend lint/test/build
 
 ## Phase 1 — Auth and data model
-- [ ] SQLAlchemy models + first migration (see DATABASE.md)
-- [ ] Register, login, refresh, me; password hashing; JWT dependency
-- [ ] Tests for auth flow and ownership dependency
-- [ ] Frontend: login/register pages, auth context, protected routes, API client with token refresh
+- [x] SQLAlchemy models + first migration (see DATABASE.md)
+- [x] Register, login, refresh, me; password hashing; JWT dependency
+- [x] Tests for auth flow and ownership dependency
+- [x] Frontend: login/register pages, auth context, protected routes, API client with token refresh
 
 ## Phase 2 — Upload to S3
 - [ ] `StorageService` (boto3): presign PUT/GET, head_object, delete, works with MinIO

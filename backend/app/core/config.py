@@ -18,6 +18,9 @@ class Settings(BaseSettings):
 
     # Auth (set a strong value outside local dev; never commit secrets)
     jwt_secret: str = "change-me"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 7
 
     # S3-compatible storage. An empty endpoint means "use AWS default" (see D11).
     # Local dev uses LocalStack (D13); prod uses real AWS S3.
