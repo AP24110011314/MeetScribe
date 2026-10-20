@@ -3,12 +3,12 @@
 Work one phase at a time. Tick boxes as you finish. Each phase ends with tests passing and a commit.
 
 ## Phase 0 — Scaffold
-- [ ] Monorepo layout from AGENTS.md, `.gitignore`, `.env.example`
-- [ ] `docker-compose.yml`: postgres, redis, minio, minio-init, api, worker, frontend
-- [ ] FastAPI app with `/healthz`, config via pydantic-settings
-- [ ] Alembic initialised, ruff + mypy + pytest configured
-- [ ] Vite React TS app with Tailwind, router, TanStack Query
-- [ ] GitHub Actions CI: backend lint/test, frontend lint/test/build
+- [x] Monorepo layout from AGENTS.md, `.gitignore`, `.env.example`
+- [x] `docker-compose.yml`: postgres, redis, minio, minio-init, api, worker, frontend
+- [x] FastAPI app with `/healthz`, config via pydantic-settings
+- [x] Alembic initialised, ruff + mypy + pytest configured
+- [x] Vite React TS app with Tailwind, router, TanStack Query
+- [x] GitHub Actions CI: backend lint/test, frontend lint/test/build
 
 ## Phase 1 — Auth and data model
 - [ ] SQLAlchemy models + first migration (see DATABASE.md)

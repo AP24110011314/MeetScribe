@@ -25,34 +25,24 @@ services:
       timeout: 3s
       retries: 10
 
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
+  # S3-compatible storage for local dev. See D13 in docs/DECISIONS.md.
+  localstack:
+    image: localstack/localstack:3.8
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      SERVICES: s3
+      DEFAULT_REGION: us-east-1
+      S3_SKIP_SIGNATURE_VALIDATION: "0"
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "9000:4566"
+      - "9001:4566"
     volumes:
-      - minio_data:/data
+      - localstack_data:/var/lib/localstack
+      - ./scripts/localstack-init.sh:/etc/localstack/init/ready.d/init-s3.sh:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:4566/_localstack/health || exit 1"]
       interval: 5s
       timeout: 5s
-      retries: 10
-
-  minio-init:
-    image: minio/mc:latest
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 minioadmin minioadmin
-      && (mc mb -p local/meetscribe || true)
-      && mc anonymous set none local/meetscribe
-      "
+      retries: 20
 
   api:
     build: ./backend
@@ -62,7 +52,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://meet:meet@postgres:5432/meetscribe
       REDIS_URL: redis://redis:6379/0
-      S3_ENDPOINT_URL: http://minio:9000
+      S3_ENDPOINT_URL: http://localstack:4566
       S3_PUBLIC_ENDPOINT_URL: http://localhost:9000
     ports:
       - "8000:8000"
@@ -73,8 +63,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
+      localstack:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
       interval: 5s
@@ -90,7 +80,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://meet:meet@postgres:5432/meetscribe
       REDIS_URL: redis://redis:6379/0
-      S3_ENDPOINT_URL: http://minio:9000
+      S3_ENDPOINT_URL: http://localstack:4566
       S3_PUBLIC_ENDPOINT_URL: http://localhost:9000
     volumes:
       - ./backend:/app
@@ -99,8 +89,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
+      localstack:
+        condition: service_healthy
 
   beat:
     build: ./backend
@@ -133,5 +123,5 @@ services:
 
 volumes:
   postgres_data:
-  minio_data:
+  localstack_data:
   frontend_node_modules:

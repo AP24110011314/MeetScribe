@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     jwt_secret: str = "change-me"
 
     # S3-compatible storage. An empty endpoint means "use AWS default" (see D11).
-    s3_endpoint_url: str = "http://localhost:9000"
+    # Local dev uses LocalStack (D13); prod uses real AWS S3.
+    s3_endpoint_url: str = "http://localhost:4566"
     s3_public_endpoint_url: str = "http://localhost:9000"
     s3_bucket: str = "meetscribe"
     s3_access_key: str = "minioadmin"

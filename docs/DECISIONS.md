@@ -2,12 +2,11 @@
 
 Log of non-obvious assumptions and decisions, per AGENTS.md. Newest last.
 
-## D1 — Docs live at repo root and in docs/ (Phase 0)
-AGENTS.md and PROMPT.md reference `docs/`, but the source documents were authored at the
-repo root. Per user instruction, `docs/` holds copies of the seven source-of-truth
-documents (PRD, ARCHITECTURE, DATABASE, API, PROMPTS, TASKS, DEPLOYMENT). The `docs/`
-copies are the canonical working copies (checkboxes are ticked there); if a doc change is
-made in a later phase, both copies are kept identical.
+## D1 — Docs live in docs/ (Phase 0)
+AGENTS.md and PROMPT.md reference `docs/`, and the seven source-of-truth documents (PRD,
+ARCHITECTURE, DATABASE, API, PROMPTS, TASKS, DEPLOYMENT) now live in `docs/` only — the
+root copies no longer exist. `docs/` is the canonical location; checkboxes are ticked
+there. AGENTS.md, PROMPT.md and README.md stay at the repo root.
 
 ## D2 — Project files live at repo root
 AGENTS.md's layout drawing shows a `meetscribe/` directory, but the repository root
@@ -65,3 +64,15 @@ API.md maps statuses to progress (`queued 5%`, `preparing 15%`, `transcribing 15
 `progress_pct` is derived from the latest job's `stage` plus the meeting status; the
 chunk-based refinement within `transcribing` uses the segment/chunk counts recorded on
 the job row's `error`-adjacent metadata only if needed later — no schema change.
+
+## D13 — LocalStack replaces MinIO for local S3 (Phase 0)
+The docs specify MinIO for local dev, but `minio/minio` and `minio/mc` can no longer be
+pulled on this machine (Docker Hub returns 404 for the repo; `quay.io/minio/minio`
+requires auth). Swapped for `localstack/localstack:3.8` with `SERVICES=s3`, which speaks
+the same S3 API (presigned PUT/GET, head_object, delete) the app relies on. Consequences:
+  - compose has one `localstack` service (replacing `minio` + `minio-init`); the bucket is
+    created by `scripts/localstack-init.sh` via `awslocal`.
+  - Local S3 endpoint becomes `http://localstack:4566` (internal) /
+    `http://localhost:9000` (browser-facing, same as before).
+  - Production is unaffected: `S3_ENDPOINT_URL=""` uses real AWS S3 (D11).
+  - S3 access still goes through `StorageService` only, so tests use moto regardless.

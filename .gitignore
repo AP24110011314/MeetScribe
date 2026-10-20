@@ -17,6 +17,10 @@ htmlcov/
 node_modules/
 dist/
 
+# Celery beat schedule file (runtime artifact)
+backend/celerybeat-schedule
+backend/celerybeat-schedule.*
+
 # Audio and model artifacts (never commit)
 backend/models/
 uploads/
