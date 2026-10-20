@@ -60,7 +60,8 @@ def render_markdown(
             due = item.due_date.isoformat() if isinstance(item.due_date, date) else ""
             owner = item.owner or "—"
             lines.append(
-                f"- [ ] {item.description} (owner: {owner}, due: {due or '—'}, priority: {item.priority.value}, status: {item.status.value})"
+                f"- [ ] {item.description} (owner: {owner}, due: {due or '—'}, "
+                f"priority: {item.priority.value}, status: {item.status.value})"
             )
         lines.append("")
 
@@ -117,7 +118,10 @@ def render_pdf(
         for item in action_items:
             due = item.due_date.isoformat() if isinstance(item.due_date, date) else "—"
             owner = item.owner or "—"
-            text = f"- {item.description} (owner: {owner}, due: {due}, priority: {item.priority.value})"
+            text = (
+                f"- {item.description} (owner: {owner}, due: {due}, "
+                f"priority: {item.priority.value})"
+            )
             for line in _wrap(text, 90):
                 if y < 60:
                     c.showPage()

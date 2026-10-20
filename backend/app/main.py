@@ -48,6 +48,11 @@ def create_app() -> FastAPI:
         """Liveness probe: process is up and serving requests."""
         return {"status": "ok"}
 
+    @app.get("/readyz", tags=["system"])
+    async def readyz() -> dict[str, str]:
+        """Readiness probe: process is ready to serve requests."""
+        return {"status": "ready"}
+
     logger.info("MeetScribe API started", extra={"env": settings.env})
     return app
 

@@ -1,10 +1,11 @@
 """Auth endpoints (docs/API.md). Thin: all rules live in `app.services.auth`."""
 
 import jwt
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.errors import APIError
+from app.core.rate_limit import check_login, check_register
 from app.core.security import create_access_token, decode_token
 from app.schemas.auth import (
     AccessTokenResponse,
@@ -19,13 +20,22 @@ from app.services import auth as auth_service
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", status_code=status.HTTP_201_CREATED, response_model=UserResponse)
+@router.post(
+    "/register",
+    status_code=status.HTTP_201_CREATED,
+    response_model=UserResponse,
+    dependencies=[Depends(check_register)],
+)
 async def register(payload: RegisterRequest, session: DbSession) -> UserResponse:
     user = await auth_service.register_user(session, payload.email, payload.password)
     return UserResponse.model_validate(user)
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    dependencies=[Depends(check_login)],
+)
 async def login(payload: LoginRequest, session: DbSession) -> TokenResponse:
     user = await auth_service.authenticate(session, payload.email, payload.password)
     access_token, refresh_token = auth_service.issue_tokens(user)

@@ -29,7 +29,11 @@ from app.services.storage import PRESIGN_EXPIRES_SEC
 router = APIRouter(prefix="/meetings", tags=["meetings"])
 
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=CreateMeetingResponse)
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    response_model=CreateMeetingResponse,
+)
 async def create_meeting(
     payload: CreateMeetingRequest,
     current_user: CurrentUser,
