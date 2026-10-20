@@ -61,8 +61,8 @@ Work one phase at a time. Tick boxes as you finish. Each phase ends with tests p
 - [x] Accessibility pass, responsive layout, dark mode
 
 ## Phase 9 — Deploy
-- [ ] Follow `docs/DEPLOYMENT.md`; live URL and demo video in README
-- [ ] Architecture diagram image in README
+- [x] Follow `docs/DEPLOYMENT.md`; live URL and demo video in README
+- [x] Architecture diagram image in README
 
 ## Stretch
 - [ ] Speaker diarization, semantic search (pgvector), email/Slack share, multi-language
