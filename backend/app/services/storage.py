@@ -1,5 +1,6 @@
 """S3 storage access (ARCHITECTURE.md). All S3 calls go through this interface."""
 
+from pathlib import Path
 from typing import Protocol
 
 import boto3
@@ -24,6 +25,10 @@ class StorageService(Protocol):
     def object_exists(self, key: str) -> bool: ...
 
     def delete_object(self, key: str) -> None: ...
+
+    def download_to_file(self, key: str, destination: Path) -> None: ...
+
+    def upload_file(self, key: str, source: Path, content_type: str) -> None: ...
 
 
 def audio_object_key(user_id: str, meeting_id: str, filename: str) -> str:
@@ -108,6 +113,17 @@ class S3StorageService:
 
     def delete_object(self, key: str) -> None:
         self._internal.delete_object(Bucket=self._bucket, Key=key)
+
+    def download_to_file(self, key: str, destination: Path) -> None:
+        """Stream an object to a local file without buffering it all in memory."""
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        self._internal.download_file(self._bucket, key, str(destination))
+
+    def upload_file(self, key: str, source: Path, content_type: str) -> None:
+        """Upload a local file to S3 with the given content type."""
+        self._internal.upload_file(
+            str(source), self._bucket, key, ExtraArgs={"ContentType": content_type}
+        )
 
 
 def get_storage_service() -> StorageService:

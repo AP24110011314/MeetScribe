@@ -183,3 +183,48 @@ Redis.
 `celery_app.task` / `shared_task` ship no type stubs, so functions decorated with them are
 flagged `untyped-decorator` under strict mypy. A per-module override disables only that
 check for `app.workers.tasks` and `app.workers.celery_app`; everything else stays strict.
+
+## D31 — Long recordings are chunked at 30-minute windows (Phase 4)
+`AUDIO_CHUNK_SECONDS` defaults to 1800. A recording at or under one window is normalized
+into a single 16 kHz mono WAV; longer recordings are split by ffmpeg's segment muxer into
+fixed 1800 s windows. This bounds the model's per-pass input (memory/latency) while keeping
+the number of Whisper calls small for typical meetings. Both `CHUNK_SECONDS` and the
+"≤1 window = 1 chunk" rule are what `expected_chunk_count` reports for progress.
+
+## D32 — Chunk timestamps are corrected with exact window offsets (Phase 4)
+Each chunk starts at `index * chunk_seconds`, and `merge_segments` adds that offset to every
+segment the chunk produced, then sorts by start time. Because the segment muxer starts from
+a fixed `-ss 0` with `-reset_timestamps 1`, chunk `i` covers exactly
+`[i * chunk_seconds, (i+1) * chunk_seconds)`, so merged timestamps are relative to the full
+recording — which the transcript UI and the audio-player seek (F4) rely on. Units in the
+merge are pure functions unit-tested without ffmpeg.
+
+## D33 — Each job gets a temp dir that the finalize stage always removes (Phase 4)
+`WORKER_TEMP_DIR` (default `/tmp/meetscribe`) holds one directory per meeting for the
+downloaded original, the normalized WAV, and chunks. The `finalize` stage removes it with
+`shutil.rmtree(..., ignore_errors=True)`. A failed/crashed run may leave a dir behind; it is
+harmless (idempotent stages re-create what they need) and is reclaimed when the stage reruns
+to completion. Audio itself is streamed to/from S3 via `download_to_file`/`upload_file`, so
+it never passes through the API server or a single unbounded in-memory buffer (AGENTS.md
+rule 5).
+
+## D34 — Pipeline stages are idempotent by object/row existence (Phase 4)
+`prepare` skips download+normalize+upload when the normalized S3 object already exists (and
+recovers `duration_sec` from the meeting row). `transcribe` skips when a `transcripts` row
+already exists. Together with the Phase 3 status/job bookkeeping this makes `process_meeting`
+safe to re-run after a retry or a partially completed attempt, per AGENTS.md rule 6.
+
+## D35 — faster-whisper is imported lazily and the model is cached per process (Phase 4)
+`FasterWhisperTranscriber` imports `faster_whisper` and constructs `WhisperModel` on first
+`transcribe()` call, then caches it on the instance. The API process and the whole test
+suite therefore never import torch/ctranslate2 or download weights (D7). The transcriber is
+built per job via `get_transcriber()`, so a worker process reuses one model across the tasks
+it handles. `faster-whisper` is a core dependency; `openai` (the D6 provider) is an optional
+extra (`pip install .[openai]`) so it is only present when `TRANSCRIBER=openai` is used.
+
+## D36 — "No speech detected" is a permanent failure (Phase 4)
+Whisper runs with `vad_filter=True`; if the recording yields no non-empty segments the
+transcribe stage raises `PermanentStageError` and the meeting is marked `failed` with a
+clear message rather than retrying forever. Silence, pure tones, and unreadable media all
+fall here. Verified live: a 440 Hz test tone was correctly rejected as "No speech detected"
+while a spoken clip transcribed cleanly.

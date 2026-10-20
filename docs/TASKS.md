@@ -30,10 +30,10 @@ Work one phase at a time. Tick boxes as you finish. Each phase ends with tests p
 - [x] Tests: task state transitions (Celery eager mode)
 
 ## Phase 4 — Audio prep and transcription
-- [ ] `AudioService`: ffprobe duration, ffmpeg normalize to 16kHz mono wav, chunking with overlap-free time offsets
-- [ ] `Transcriber` interface + `FasterWhisperTranscriber` (model cached per process)
-- [ ] Merge chunk segments with correct offsets; save transcript row + tsvector
-- [ ] Tests with a short fixture audio file and a fake transcriber
+- [x] `AudioService`: ffprobe duration, ffmpeg normalize to 16kHz mono wav, chunking with overlap-free time offsets
+- [x] `Transcriber` interface + `FasterWhisperTranscriber` (model cached per process)
+- [x] Merge chunk segments with correct offsets; save transcript row + tsvector
+- [x] Tests with a short fixture audio file and a fake transcriber
 
 ## Phase 5 — LLM analysis
 - [ ] `LLMClient` interface + Anthropic implementation, JSON output validated by Pydantic

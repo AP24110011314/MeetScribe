@@ -36,6 +36,10 @@ class Settings(BaseSettings):
     whisper_model: str = "small"
     whisper_device: str = "cpu"
     whisper_compute_type: str = "int8"
+    transcribe_language: str = ""  # "" means auto-detect
+    openai_api_key: str = ""  # only for TRANSCRIBER=openai (D6)
+    openai_whisper_model: str = "whisper-1"
+    audio_chunk_seconds: int = 30 * 60  # long recordings are split into these windows (D31)
 
     # LLM
     llm_provider: str = "anthropic"
@@ -44,6 +48,9 @@ class Settings(BaseSettings):
 
     # Uploads
     max_upload_mb: int = 500
+
+    # Worker temp space: each job gets a directory here, always removed in `finally`.
+    worker_temp_dir: str = "/tmp/meetscribe"
 
     # Processing pipeline (ARCHITECTURE.md reliability rules)
     pipeline_max_retries: int = 3  # bounded retries per stage, exponential backoff

@@ -18,9 +18,14 @@ dependencies = [
     "bcrypt>=4.0.0,<4.1",        # passlib bcrypt backend (pinned: passlib needs <4.1)
     "pyjwt>=2.9.0",              # JWT access/refresh tokens (ARCHITECTURE.md)
     "email-validator>=2.2.0",    # pydantic EmailStr validation
+    "faster-whisper>=1.0.0",     # default local transcriber (AGENTS.md, Phase 4)
 ]
 
 [project.optional-dependencies]
+# Optional Whisper provider (D6): only installed when TRANSCRIBER=openai is used.
+openai = [
+    "openai>=1.30.0",  # OpenAI Whisper API transcriber (optional provider)
+]
 dev = [
     "pytest>=8.2.0",
     "pytest-asyncio>=0.23.0",
@@ -55,7 +60,7 @@ files = ["app"]
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = ["celery.*", "boto3.*", "botocore.*"]
+module = ["celery.*", "boto3.*", "botocore.*", "faster_whisper.*", "openai.*"]
 ignore_missing_imports = true
 
 # Celery's task decorators ship no types, so their return value is untyped by nature.

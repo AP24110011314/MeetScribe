@@ -30,11 +30,12 @@ logger = logging.getLogger(__name__)
 def _run_stages(
     meeting_id: uuid.UUID,
     stages: list[JobStage] | None,
+    ctx: pipeline.StageContext,
 ) -> list[str]:
     """Run the async pipeline core in a private event loop (sync Celery context)."""
 
     async def action(session: AsyncSession) -> list[str]:
-        return await pipeline.run_pipeline(session, meeting_id, stages=stages)
+        return await pipeline.run_pipeline(session, meeting_id, stages=stages, ctx=ctx)
 
     return list(pipeline.run_sync(action))
 
@@ -73,6 +74,7 @@ def run_pipeline(
     *,
     stages: list[JobStage] | None = None,
     on_retry: Callable[..., BaseException] | None = None,
+    ctx: pipeline.StageContext | None = None,
 ) -> list[str]:
     """Sync pipeline driver with retry handling; broker-agnostic via `on_retry`.
 
@@ -81,11 +83,12 @@ def run_pipeline(
     """
     settings = get_settings()
     ordered = stages if stages is not None else pipeline.stage_order()
+    resolved = ctx if ctx is not None else pipeline.default_context()
 
     for index, stage_name in enumerate(ordered):
         remaining = ordered[index:]
         try:
-            return _run_stages(meeting_id, remaining)
+            return _run_stages(meeting_id, remaining, resolved)
         except pipeline.PermanentStageError as exc:
             logger.warning(
                 "Pipeline stage failed permanently",

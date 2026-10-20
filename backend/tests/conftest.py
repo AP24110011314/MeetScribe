@@ -7,6 +7,7 @@ created by running the migrations once per session.
 
 import os
 from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -28,6 +29,9 @@ from app.api.deps import get_db, get_storage  # noqa: E402
 from app.db import models  # noqa: E402,F401  (register tables on Base.metadata)
 from app.db.base import Base  # noqa: E402
 from app.main import create_app  # noqa: E402
+from app.services.audio import AudioChunk, expected_chunk_count  # noqa: E402
+from app.services.transcription import Segment, TranscriptResult  # noqa: E402
+from app.workers.pipeline import StageContext  # noqa: E402
 
 
 class FakeStorage:
@@ -36,6 +40,7 @@ class FakeStorage:
     def __init__(self) -> None:
         self.objects: dict[str, dict[str, object]] = {}
         self.deleted: list[str] = []
+        self.uploads: dict[str, bytes] = {}
 
     def presign_put(self, key: str, content_type: str) -> str:
         return f"http://fake-s3/put/{key}?ct={content_type}"
@@ -52,6 +57,17 @@ class FakeStorage:
     def delete_object(self, key: str) -> None:
         self.deleted.append(key)
         self.objects.pop(key, None)
+        self.uploads.pop(key, None)
+
+    def download_to_file(self, key: str, destination: Path) -> None:
+        if key not in self.objects:
+            raise FileNotFoundError(f"No such object: {key}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(self.uploads.get(key, b""))
+
+    def upload_file(self, key: str, source: Path, content_type: str) -> None:
+        self.uploads[key] = source.read_bytes()
+        self.objects[key] = {"ContentLength": source.stat().st_size, "ContentType": content_type}
 
     def put(self, key: str, **metadata: object) -> None:
         """Test helper simulating a completed browser upload."""
@@ -97,6 +113,83 @@ async def _no_broker(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest_asyncio.fixture
 async def fake_storage() -> FakeStorage:
     return FakeStorage()
+
+
+class FakeAudioService:
+    """Deterministic AudioService stand-in: no ffmpeg, no real media needed (AGENTS.md)."""
+
+    def __init__(self, *, duration_sec: float = 90.0) -> None:
+        self.duration_sec = duration_sec
+        self.normalized: list[Path] = []
+        self.chunked: list[Path] = []
+
+    def probe_duration(self, path: Path) -> float:
+        return self.duration_sec
+
+    def normalize(self, source: Path, destination: Path) -> None:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(b"RIFF-fake-wav")
+        self.normalized.append(destination)
+
+    def chunk(self, source: Path, workdir: Path, *, chunk_seconds: int) -> list[AudioChunk]:
+        workdir.mkdir(parents=True, exist_ok=True)
+        self.chunked.append(source)
+        count = expected_chunk_count(self.duration_sec, chunk_seconds)
+        chunks: list[AudioChunk] = []
+        for index in range(count):
+            path = workdir / f"chunk_{index:03d}.wav"
+            path.write_bytes(b"RIFF-fake-wav")
+            chunks.append(AudioChunk(path=path, start_sec=index * chunk_seconds, index=index))
+        return chunks
+
+
+class FakeTranscriber:
+    """Deterministic Transcriber stand-in; never downloads a model (D7)."""
+
+    def __init__(self, *, language: str = "en", seconds_per_chunk: float = 12.0) -> None:
+        self.language = language
+        self.seconds_per_chunk = seconds_per_chunk
+        self.calls: list[tuple[Path, str | None]] = []
+
+    @property
+    def model_name(self) -> str:
+        return "fake-whisper"
+
+    def transcribe(self, wav_path: Path, language: str | None = None) -> TranscriptResult:
+        self.calls.append((wav_path, language))
+        # Two segments per chunk; the pipeline is responsible for applying offsets.
+        return TranscriptResult(
+            language=self.language,
+            duration=self.seconds_per_chunk,
+            segments=[
+                Segment(start=0.0, end=self.seconds_per_chunk / 2, text=f"{wav_path.name} part 1"),
+                Segment(
+                    start=self.seconds_per_chunk / 2,
+                    end=self.seconds_per_chunk,
+                    text=f"{wav_path.name} part 2",
+                ),
+            ],
+        )
+
+
+@pytest_asyncio.fixture
+async def fake_audio() -> FakeAudioService:
+    return FakeAudioService()
+
+
+@pytest_asyncio.fixture
+async def fake_transcriber() -> FakeTranscriber:
+    return FakeTranscriber()
+
+
+@pytest_asyncio.fixture
+async def stage_context(
+    fake_storage: FakeStorage,
+    fake_audio: FakeAudioService,
+    fake_transcriber: FakeTranscriber,
+) -> StageContext:
+    """A StageContext wired to fakes: no ffmpeg, Whisper, or S3 in unit tests."""
+    return StageContext(storage=fake_storage, audio=fake_audio, transcriber=fake_transcriber)
 
 
 @pytest_asyncio.fixture
