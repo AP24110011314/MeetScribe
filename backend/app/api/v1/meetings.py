@@ -9,6 +9,7 @@ from app.schemas.meetings import (
     CreateMeetingRequest,
     CreateMeetingResponse,
     MeetingListItem,
+    MeetingStatusResponse,
     PaginatedMeetings,
 )
 from app.services import meetings as meetings_service
@@ -48,6 +49,20 @@ async def complete_meeting(
 ) -> MeetingListItem:
     updated = await meetings_service.complete_upload(session, storage, meeting)
     return MeetingListItem.model_validate(updated)
+
+
+@router.get("/{meeting_id}/status", response_model=MeetingStatusResponse)
+async def get_meeting_status(
+    meeting: OwnedMeeting,
+    session: DbSession,
+) -> MeetingStatusResponse:
+    status, stage, progress = await meetings_service.get_meeting_status(session, meeting)
+    return MeetingStatusResponse(
+        status=status,
+        stage=stage,
+        progress_pct=progress,
+        error_message=meeting.error_message,
+    )
 
 
 @router.get("", response_model=PaginatedMeetings)

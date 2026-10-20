@@ -1,4 +1,4 @@
-"""Meeting business logic: creation, upload completion, deletion (Phase 7 adds delete)."""
+"""Meeting business logic: creation, upload completion, status, deletion (Phase 7 adds delete)."""
 
 import uuid
 
@@ -7,13 +7,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.errors import APIError
-from app.db.enums import MeetingStatus
-from app.db.models import Meeting, User
+from app.db.enums import JobStage, MeetingStatus
+from app.db.models import Job, Meeting, User
 from app.services.storage import (
     PRESIGN_EXPIRES_SEC,
     StorageService,
     audio_object_key,
 )
+
+
+def enqueue_processing(meeting_id: str) -> None:
+    """Enqueue the processing pipeline. Indirection so tests never touch the broker."""
+    from app.workers.tasks import process_meeting
+
+    process_meeting.delay(meeting_id)
+
 
 # PRD F1 allowed formats.
 ALLOWED_CONTENT_TYPES: frozenset[str] = frozenset(
@@ -33,6 +41,28 @@ ALLOWED_CONTENT_TYPES: frozenset[str] = frozenset(
 )
 
 ALLOWED_EXTENSIONS: frozenset[str] = frozenset({".mp3", ".wav", ".m4a", ".mp4", ".webm", ".ogg"})
+
+# Progress per status, per docs/API.md "Status mapping for progress bar".
+# transcribing spans 15-70% scaled by chunk count, analyzing 70-95%.
+_PROGRESS_BY_STATUS: dict[MeetingStatus, int] = {
+    MeetingStatus.PENDING_UPLOAD: 0,
+    MeetingStatus.QUEUED: 5,
+    MeetingStatus.PREPARING: 15,
+    MeetingStatus.TRANSCRIBING: 15,
+    MeetingStatus.ANALYZING: 70,
+    MeetingStatus.DONE: 100,
+    MeetingStatus.FAILED: 0,
+}
+
+
+def progress_pct(meeting: Meeting) -> int:
+    """Progress bar percentage derived from status and (later) chunk level (D12).
+
+    No schema change: the percentage is computed, not stored.
+    """
+    if meeting.status is MeetingStatus.FAILED:
+        return 0
+    return _PROGRESS_BY_STATUS.get(meeting.status, 0)
 
 
 def validate_upload(content_type: str, size_bytes: int, filename: str) -> None:
@@ -95,7 +125,7 @@ async def create_meeting(
 async def complete_upload(
     session: AsyncSession, storage: StorageService, meeting: Meeting
 ) -> Meeting:
-    """Verify the object exists in S3 and move the meeting to `queued`."""
+    """Verify the object exists in S3, move the meeting to `queued`, and enqueue processing."""
     if meeting.status is not MeetingStatus.PENDING_UPLOAD:
         raise APIError(409, "Upload already completed", "UPLOAD_ALREADY_COMPLETED")
 
@@ -108,6 +138,9 @@ async def complete_upload(
     meeting.status = MeetingStatus.QUEUED
     await session.commit()
     await session.refresh(meeting)
+
+    # Enqueue after the row is durable so the worker can always find it (ARCHITECTURE.md).
+    enqueue_processing(str(meeting.id))
     return meeting
 
 
@@ -146,11 +179,33 @@ async def get_meeting_detail(session: AsyncSession, meeting_id: uuid.UUID) -> Me
     return await session.get(Meeting, meeting_id)
 
 
+async def get_meeting_status(
+    session: AsyncSession, meeting: Meeting
+) -> tuple[MeetingStatus, JobStage | None, int]:
+    """Return `(status, stage, progress_pct)` for `GET /meetings/{id}/status`."""
+    job = (await session.execute(select(Job).where(Job.meeting_id == meeting.id))).scalars().first()
+    stage = job.stage_enum if job is not None else None
+    if stage is None:
+        stage = _status_to_stage(meeting.status)
+    return meeting.status, stage, progress_pct(meeting)
+
+
+def _status_to_stage(status: MeetingStatus) -> JobStage | None:
+    """Best-effort stage for statuses that always imply one."""
+    return {
+        MeetingStatus.PREPARING: JobStage.PREPARE,
+        MeetingStatus.TRANSCRIBING: JobStage.TRANSCRIBE,
+        MeetingStatus.ANALYZING: JobStage.ANALYZE,
+    }.get(status)
+
+
 __all__ = [
     "ALLOWED_CONTENT_TYPES",
     "PRESIGN_EXPIRES_SEC",
     "complete_upload",
     "create_meeting",
+    "get_meeting_status",
     "list_meetings",
+    "progress_pct",
     "validate_upload",
 ]

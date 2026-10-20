@@ -143,3 +143,43 @@ presigned PUT returns 200 and the object is stored. The app's presign/head/delet
 unchanged and correct — this is a LocalStack-specific dev accommodation. Production uses
 real AWS S3, which validates signatures normally. Verified end to end: create → presigned
 PUT → `head_object` → `queued`.
+
+## D25 — Progress percentages are derived, not stored (Phase 3)
+`GET /meetings/{id}/status` returns `progress_pct` computed from the meeting status per
+docs/API.md's mapping (`queued 5`, `preparing 15`, `transcribing 15` (chunk-scaled in
+Phase 4), `analyzing 70`, `done 100`, `failed 0`). No column is added for it, so the
+progress bar needs no schema change and no extra writes per stage.
+
+## D26 — The pipeline runs as one task in Phase 3 (Phase 3)
+`process_meeting` walks the four stages sequentially inside a single Celery task rather
+than a Celery `chain` of four tasks. The stages are pure stubs here, so a chain would only
+add broker round-trips. When Phase 4/5 give stages real work, the split point is already
+clean (`pipeline.build_stages` + `pipeline.run_pipeline`) and can become a chain without
+touching the API or the status bookkeeping.
+
+## D27 — Transient failures do not fail the meeting immediately (Phase 3)
+A `TransientStageError` leaves the meeting in its in-progress status (so a retry re-enters
+the same stage) and records the error on the `jobs` row; only after retries are exhausted
+(or for a `PermanentStageError`) is the meeting set to `failed`. This matches
+ARCHITECTURE.md's "retry only transient errors, 3 attempts with backoff". Retry backoff is
+`min(2**attempt * 30s, PIPELINE_MAX_RETRIES * 60s)`.
+
+## D28 — Stuck-meeting sweep runs every 10 minutes (Phase 3)
+The beat task `sweep_stuck_meetings` runs on a 10-minute schedule and fails any meeting
+still in `queued|preparing|transcribing|analyzing` whose `updated_at` is older than
+`STUCK_MEETING_MINUTES` (default 60). It uses `updated_at` because it is maintained
+automatically by the ORM on every stage write.
+
+## D29 — The async pipeline core is testable without a broker (Phase 3)
+`pipeline.run_pipeline(session, meeting_id)` is async and takes the caller's session, so
+tests await it directly. The sync Celery driver lives in `tasks.run_pipeline` and wraps the
+core in `run_sync` (its own event loop, disposing the engine pool each call because asyncpg
+connections are loop-bound). Tests that need the sync path run as plain `def` tests to
+avoid nesting `asyncio.run`. `complete_upload` enqueues through the small
+`enqueue_processing` indirection, which the test suite monkeypatches so no test touches
+Redis.
+
+## D30 — Celery task decorators are exempt from mypy's untyped-decorator rule (Phase 3)
+`celery_app.task` / `shared_task` ship no type stubs, so functions decorated with them are
+flagged `untyped-decorator` under strict mypy. A per-module override disables only that
+check for `app.workers.tasks` and `app.workers.celery_app`; everything else stays strict.

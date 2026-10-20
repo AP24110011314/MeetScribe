@@ -36,6 +36,15 @@ export interface CreateMeetingResponse {
   expires_in: number;
 }
 
+export type JobStage = "prepare" | "transcribe" | "analyze" | "finalize";
+
+export interface MeetingStatusResponse {
+  status: MeetingStatus;
+  stage: JobStage | null;
+  progress_pct: number;
+  error_message: string | null;
+}
+
 export interface ListMeetingsParams {
   q?: string;
   status?: MeetingStatus;
@@ -56,6 +65,15 @@ export function createMeeting(
 
 export function completeMeeting(meetingId: string): Promise<MeetingListItem> {
   return apiFetch<MeetingListItem>(`/meetings/${meetingId}/complete`, { method: "POST" });
+}
+
+export function getMeetingStatus(meetingId: string): Promise<MeetingStatusResponse> {
+  return apiFetch<MeetingStatusResponse>(`/meetings/${meetingId}/status`);
+}
+
+/** Statuses that mean processing is finished; polling stops there (API.md). */
+export function isTerminalStatus(status: MeetingStatus): boolean {
+  return status === "done" || status === "failed" || status === "pending_upload";
 }
 
 export function listMeetings(params: ListMeetingsParams = {}): Promise<PaginatedMeetings> {

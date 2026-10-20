@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     # Uploads
     max_upload_mb: int = 500
 
+    # Processing pipeline (ARCHITECTURE.md reliability rules)
+    pipeline_max_retries: int = 3  # bounded retries per stage, exponential backoff
+    stuck_meeting_minutes: int = 60  # beat marks meetings stuck longer than this as failed
+
     # CORS
     cors_origins: str = "http://localhost:5173"
 

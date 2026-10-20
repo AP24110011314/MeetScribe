@@ -58,6 +58,11 @@ warn_unreachable = true
 module = ["celery.*", "boto3.*", "botocore.*"]
 ignore_missing_imports = true
 
+# Celery's task decorators ship no types, so their return value is untyped by nature.
+[[tool.mypy.overrides]]
+module = ["app.workers.tasks", "app.workers.celery_app"]
+disallow_untyped_decorators = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"

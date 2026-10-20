@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 
 import type { MeetingStatus } from "../api/meetings";
-import { StatusBadge } from "../components/StatusBadge";
+import { MeetingRow } from "../components/MeetingRow";
 import { Uploader } from "../components/Uploader";
 import { useMeetings } from "../hooks/useMeetings";
 
@@ -96,20 +95,7 @@ export function Meetings() {
         {data && data.items.length > 0 && (
           <ul className="divide-y divide-gray-200 dark:divide-gray-800">
             {data.items.map((meeting) => (
-              <li key={meeting.id} className="flex items-center justify-between py-3">
-                <div className="min-w-0">
-                  <Link
-                    to={`/meetings/${meeting.id}`}
-                    className="truncate font-medium hover:underline"
-                  >
-                    {meeting.title ?? meeting.original_filename}
-                  </Link>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {new Date(meeting.created_at).toLocaleString()}
-                  </p>
-                </div>
-                <StatusBadge status={meeting.status} />
-              </li>
+              <MeetingRow key={meeting.id} meeting={meeting} />
             ))}
           </ul>
         )}

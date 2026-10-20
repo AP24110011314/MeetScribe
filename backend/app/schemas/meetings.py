@@ -5,7 +5,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.db.enums import ActionItemStatus, MeetingStatus, Priority
+from app.db.enums import ActionItemStatus, JobStage, MeetingStatus, Priority
 
 
 class CreateMeetingRequest(BaseModel):
@@ -82,3 +82,12 @@ class PaginatedMeetings(BaseModel):
     page: int
     page_size: int
     total: int
+
+
+class MeetingStatusResponse(BaseModel):
+    """`GET /meetings/{id}/status` (docs/API.md)."""
+
+    status: MeetingStatus
+    stage: JobStage | None
+    progress_pct: int
+    error_message: str | None = None

@@ -23,11 +23,11 @@ Work one phase at a time. Tick boxes as you finish. Each phase ends with tests p
 - [x] Tests with moto or MinIO test container
 
 ## Phase 3 — Async pipeline skeleton
-- [ ] Celery app, `process_meeting` chain with stub stages that update status
-- [ ] `jobs` table updates, retries, `acks_late`
-- [ ] `/meetings/{id}/status` + frontend polling with progress bar
-- [ ] Beat task for stuck-job cleanup
-- [ ] Tests: task state transitions (Celery eager mode)
+- [x] Celery app, `process_meeting` chain with stub stages that update status
+- [x] `jobs` table updates, retries, `acks_late`
+- [x] `/meetings/{id}/status` + frontend polling with progress bar
+- [x] Beat task for stuck-job cleanup
+- [x] Tests: task state transitions (Celery eager mode)
 
 ## Phase 4 — Audio prep and transcription
 - [ ] `AudioService`: ffprobe duration, ffmpeg normalize to 16kHz mono wav, chunking with overlap-free time offsets

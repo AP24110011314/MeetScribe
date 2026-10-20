@@ -85,6 +85,15 @@ async def _clean_tables(engine: object) -> AsyncIterator[None]:
     yield
 
 
+@pytest_asyncio.fixture(autouse=True)
+async def _no_broker(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep tests off Redis: record enqueues instead of sending them (AGENTS.md rule 6)."""
+    from app.services import meetings as meetings_service
+
+    enqueued: list[str] = []
+    monkeypatch.setattr(meetings_service, "enqueue_processing", enqueued.append)
+
+
 @pytest_asyncio.fixture
 async def fake_storage() -> FakeStorage:
     return FakeStorage()
