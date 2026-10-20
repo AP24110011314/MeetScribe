@@ -117,6 +117,15 @@ async def _no_broker(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(meetings_service, "enqueue_processing", enqueued.append)
 
 
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter() -> None:
+    """Reset rate limiter counters between tests so auth endpoints don't 429."""
+    from app.core.rate_limit import login_limiter, register_limiter
+
+    register_limiter._hits.clear()
+    login_limiter._hits.clear()
+
+
 @pytest_asyncio.fixture
 async def fake_storage() -> FakeStorage:
     return FakeStorage()

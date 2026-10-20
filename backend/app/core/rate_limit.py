@@ -40,8 +40,10 @@ class RateLimiter:
 login_limiter = RateLimiter(requests=5, window_seconds=60)
 register_limiter = RateLimiter(requests=3, window_seconds=60)
 
+
 def check_login(request: Request) -> None:
     login_limiter.limit(request)
+
 
 def check_register(request: Request) -> None:
     register_limiter.limit(request)

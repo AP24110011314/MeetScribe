@@ -19,6 +19,8 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,  # one in-flight task per child: fair + crash-safe
     timezone="UTC",
     enable_utc=True,
+    # Use .db extension to force ndbm backend (avoids dbm.gnu issue on macOS)
+    beat_schedule_filename="celerybeat-schedule.db",
     # Beat: fail meetings stuck in a processing state for too long (ARCHITECTURE.md).
     beat_schedule={
         "sweep-stuck-meetings": {

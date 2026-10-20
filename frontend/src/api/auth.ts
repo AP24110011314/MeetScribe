@@ -21,21 +21,21 @@ export interface AccessTokenResponse {
 export function register(email: string, password: string): Promise<User> {
   return apiFetch<User>("/auth/register", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: { email, password },
   });
 }
 
 export function login(email: string, password: string): Promise<TokenResponse> {
   return apiFetch<TokenResponse>("/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: { email, password },
   });
 }
 
 export function refresh(refreshToken: string): Promise<AccessTokenResponse> {
   return apiFetch<AccessTokenResponse>("/auth/refresh", {
     method: "POST",
-    body: JSON.stringify({ refresh_token: refreshToken }),
+    body: { refresh_token: refreshToken },
   });
 }
 
