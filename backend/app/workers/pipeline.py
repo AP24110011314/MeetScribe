@@ -1,14 +1,16 @@
 """Processing pipeline stages (ARCHITECTURE.md).
 
-Phase 3 built the skeleton; Phase 4 fills in `prepare` (download → normalize → upload) and
-`transcribe` (chunk → Whisper → merged transcript). `analyze` is still a stub until Phase 5.
+Phase 3 built the skeleton; Phase 4 filled in `prepare` (download → normalize → upload) and
+`transcribe` (chunk → Whisper → merged transcript). Phase 5 fills in `analyze` (LLM summary
++ decisions + action items).
 
 The pipeline core is async (`run_pipeline`), so tests can await it inside an existing event
 loop. Celery task bodies are synchronous, so they wrap the core with `run_sync`, which owns
 the event loop for that call.
 
 Stage work is idempotent: `prepare` skips if the normalized object already exists, and
-`transcribe` skips if a transcript row is already present (D34).
+`transcribe` skips if a transcript row is already present (D34). `analyze` replaces the
+meeting's summary and AI action items on re-run (D41).
 """
 
 import asyncio
@@ -27,13 +29,16 @@ from app.core.config import get_settings
 from app.db.enums import JobStage, MeetingStatus
 from app.db.models import Meeting
 from app.db.session import engine
+from app.services import analysis as analysis_service
 from app.services import jobs as jobs_service
+from app.services import notes as notes_service
 from app.services import transcripts as transcripts_service
 from app.services.audio import (
     AudioService,
     expected_chunk_count,
     get_audio_service,
 )
+from app.services.llm import LLMClient, LLMError, LLMValidationError, get_llm_client
 from app.services.storage import (
     StorageService,
     get_storage_service,
@@ -63,19 +68,21 @@ class PermanentStageError(StageError):
 
 @dataclass(frozen=True, slots=True)
 class StageContext:
-    """Services a stage needs. Injectable so tests swap fakes for ffmpeg/Whisper/S3."""
+    """Services a stage needs. Injectable so tests swap fakes for ffmpeg/Whisper/S3/LLM."""
 
     storage: StorageService
     audio: AudioService
     transcriber: Transcriber
+    llm: LLMClient
 
 
 def default_context() -> StageContext:
-    """Build the production context (boto3, ffmpeg, faster-whisper)."""
+    """Build the production context (boto3, ffmpeg, faster-whisper, Anthropic)."""
     return StageContext(
         storage=get_storage_service(),
         audio=get_audio_service(),
         transcriber=get_transcriber(),
+        llm=get_llm_client(),
     )
 
 
@@ -288,9 +295,65 @@ async def _to_thread(func: Callable[..., Any], *args: Any) -> Any:
 # --------------------------------------------------------------------------- analyze
 
 
-async def _stub_analyze(session: AsyncSession, meeting: Meeting, ctx: StageContext) -> None:
-    """Phase 5 replaces this with the LLM summary/decisions/action-items call."""
-    logger.info("analyze stub", extra={"meeting_id": str(meeting.id)})
+async def _stage_analyze(session: AsyncSession, meeting: Meeting, ctx: StageContext) -> None:
+    """Pipeline stage 3: ask the LLM for summary, decisions, and action items.
+
+    The transcript row must exist (the transcribe stage produces it). LLM/network failures
+    are transient; a response that stays invalid after the one retry is permanent (D42).
+    """
+    transcript = await transcripts_service.get_transcript(session, meeting.id)
+    if transcript is None:
+        raise PermanentStageError("Cannot analyze a meeting without a transcript")
+
+    segments = _segments_from_row(transcript.segments)
+    if not segments:
+        raise PermanentStageError("Cannot analyze an empty transcript")
+
+    from app.schemas.analysis import MeetingAnalysis
+
+    def _work() -> MeetingAnalysis:
+        return analysis_service.analyze(
+            llm=ctx.llm,
+            segments=segments,
+            meeting_date=analysis_service.meeting_date_for(meeting.created_at),
+            language=meeting.language,
+        )
+
+    try:
+        result = await _to_thread(_work)
+    except LLMValidationError as exc:
+        raise PermanentStageError(f"LLM returned unusable output: {exc}") from exc
+    except LLMError as exc:
+        raise TransientStageError(f"Analysis failed: {exc}") from exc
+    except Exception as exc:  # noqa: BLE001 - unexpected provider errors are retryable
+        raise TransientStageError(f"Analysis failed: {exc}") from exc
+
+    await notes_service.save_analysis(session, meeting, result, llm_model=ctx.llm.model_name)
+    logger.info(
+        "Analyzed meeting",
+        extra={
+            "meeting_id": str(meeting.id),
+            "action_items": len(result.action_items),
+            "model": ctx.llm.model_name,
+        },
+    )
+
+
+def _segments_from_row(raw: list[dict[str, object]]) -> list[Segment]:
+    """Rebuild `Segment`s from the stored JSONB payload (tolerant of older rows)."""
+    segments: list[Segment] = []
+    for item in raw:
+        try:
+            segments.append(
+                Segment(
+                    start=float(item["start"]),  # type: ignore[arg-type]
+                    end=float(item["end"]),  # type: ignore[arg-type]
+                    text=str(item["text"]),
+                )
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+    return segments
 
 
 # -------------------------------------------------------------------------- finalize
@@ -309,7 +372,7 @@ def build_stages() -> list[Stage]:
     return [
         Stage(JobStage.PREPARE, MeetingStatus.PREPARING, _stage_prepare),
         Stage(JobStage.TRANSCRIBE, MeetingStatus.TRANSCRIBING, _stage_transcribe),
-        Stage(JobStage.ANALYZE, MeetingStatus.ANALYZING, _stub_analyze),
+        Stage(JobStage.ANALYZE, MeetingStatus.ANALYZING, _stage_analyze),
         Stage(JobStage.FINALIZE, MeetingStatus.DONE, _stage_finalize),
     ]
 

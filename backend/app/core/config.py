@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     llm_provider: str = "anthropic"
     llm_api_key: str = ""
     llm_model: str = "claude-sonnet-4-6"
+    llm_max_tokens: int = 4096
+    llm_base_url: str = ""  # only for openai_compatible providers
+    # Analysis routing: transcripts at or under this budget go in a single call; longer
+    # ones use map-reduce over MAP_WINDOW_SEC windows (D37/D38).
+    analysis_token_budget: int = 20_000
+    map_window_sec: int = 600
 
     # Uploads
     max_upload_mb: int = 500

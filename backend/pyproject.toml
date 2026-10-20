@@ -19,6 +19,7 @@ dependencies = [
     "pyjwt>=2.9.0",              # JWT access/refresh tokens (ARCHITECTURE.md)
     "email-validator>=2.2.0",    # pydantic EmailStr validation
     "faster-whisper>=1.0.0",     # default local transcriber (AGENTS.md, Phase 4)
+    "anthropic>=0.25.0",         # default LLM provider (AGENTS.md, Phase 5)
 ]
 
 [project.optional-dependencies]
@@ -60,7 +61,7 @@ files = ["app"]
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = ["celery.*", "boto3.*", "botocore.*", "faster_whisper.*", "openai.*"]
+module = ["celery.*", "boto3.*", "botocore.*", "faster_whisper.*", "openai.*", "anthropic.*"]
 ignore_missing_imports = true
 
 # Celery's task decorators ship no types, so their return value is untyped by nature.

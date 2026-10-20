@@ -8,11 +8,13 @@ created by running the migrations once per session.
 import os
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
+from typing import TypeVar
 
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -28,10 +30,15 @@ os.environ.setdefault("JWT_SECRET", "test-secret-key-that-is-at-least-32-bytes-l
 from app.api.deps import get_db, get_storage  # noqa: E402
 from app.db import models  # noqa: E402,F401  (register tables on Base.metadata)
 from app.db.base import Base  # noqa: E402
+from app.db.enums import Priority  # noqa: E402
 from app.main import create_app  # noqa: E402
+from app.schemas.analysis import ActionItemDraft, PartialAnalysis  # noqa: E402
 from app.services.audio import AudioChunk, expected_chunk_count  # noqa: E402
+from app.services.llm import LLMValidationError  # noqa: E402
 from app.services.transcription import Segment, TranscriptResult  # noqa: E402
 from app.workers.pipeline import StageContext  # noqa: E402
+
+SchemaT = TypeVar("SchemaT", bound=BaseModel)
 
 
 class FakeStorage:
@@ -172,6 +179,81 @@ class FakeTranscriber:
         )
 
 
+class FakeLLMClient:
+    """Deterministic LLMClient stand-in; never calls a provider (D7).
+
+    Returns a fixed `MeetingAnalysis` (or `PartialAnalysis` for map calls) and records the
+    prompts it received so tests can assert on routing and the validation retry.
+    """
+
+    def __init__(
+        self,
+        *,
+        invalid_first: int = 0,
+        model_name: str = "fake-llm",
+        action_items: list[ActionItemDraft] | None = None,
+    ) -> None:
+        self.invalid_first = invalid_first
+        self._model_name = model_name
+        self.calls: list[tuple[str, str, type[BaseModel]]] = []
+        self._action_items = action_items
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
+    def complete_json(self, system: str, user: str, schema: type[SchemaT]) -> SchemaT:
+        self.calls.append((system, user, schema))
+        if self.invalid_first > 0:
+            self.invalid_first -= 1
+            raise LLMValidationError("summary: field required")
+
+        if schema is PartialAnalysis:
+            return schema.model_validate(
+                {
+                    "partial_summary": "Partial summary.",
+                    "key_points": ["point a", "point b", "point c"],
+                    "decisions": ["decision x"],
+                    "action_items": [
+                        {
+                            "description": "Send the deck",
+                            "owner": "Ravi",
+                            "due_date": None,
+                            "priority": "medium",
+                            "source_start_sec": 12.0,
+                        }
+                    ],
+                }
+            )
+        items = self._action_items
+        payload: dict[str, object] = {
+            "summary": "The team agreed to ship the dashboard on Friday.",
+            "key_points": [
+                "Ship on Friday",
+                "Login bug is the top priority",
+                "Notes due Wednesday",
+            ],
+            "decisions": ["Ship the dashboard on Friday"],
+            "action_items": [
+                item.model_dump(mode="json")
+                for item in (
+                    items
+                    if items is not None
+                    else [
+                        ActionItemDraft(
+                            description="Prepare the release notes",
+                            owner="Sarah",
+                            priority=Priority.MEDIUM,
+                            source_start_sec=8.0,
+                        )
+                    ]
+                )
+            ],
+            "suggested_title": "Sprint planning follow-up",
+        }
+        return schema.model_validate(payload)
+
+
 @pytest_asyncio.fixture
 async def fake_audio() -> FakeAudioService:
     return FakeAudioService()
@@ -183,13 +265,24 @@ async def fake_transcriber() -> FakeTranscriber:
 
 
 @pytest_asyncio.fixture
+async def fake_llm() -> FakeLLMClient:
+    return FakeLLMClient()
+
+
+@pytest_asyncio.fixture
 async def stage_context(
     fake_storage: FakeStorage,
     fake_audio: FakeAudioService,
     fake_transcriber: FakeTranscriber,
+    fake_llm: FakeLLMClient,
 ) -> StageContext:
-    """A StageContext wired to fakes: no ffmpeg, Whisper, or S3 in unit tests."""
-    return StageContext(storage=fake_storage, audio=fake_audio, transcriber=fake_transcriber)
+    """A StageContext wired to fakes: no ffmpeg, Whisper, LLM, or S3 in unit tests."""
+    return StageContext(
+        storage=fake_storage,
+        audio=fake_audio,
+        transcriber=fake_transcriber,
+        llm=fake_llm,
+    )
 
 
 @pytest_asyncio.fixture

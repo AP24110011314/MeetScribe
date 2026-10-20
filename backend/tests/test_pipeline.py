@@ -106,6 +106,7 @@ async def test_transcribe_applies_chunk_offsets(
     fake_storage: FakeStorage,
     fake_audio: object,
     fake_transcriber: object,
+    fake_llm: object,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A 2-chunk recording must have its second chunk's segments offset correctly."""
@@ -130,7 +131,9 @@ async def test_transcribe_applies_chunk_offsets(
     )
 
     meeting = await make_meeting(db_session, fake_storage)
-    ctx = StageContext(storage=fake_storage, audio=fake_audio, transcriber=fake_transcriber)
+    ctx = StageContext(
+        storage=fake_storage, audio=fake_audio, transcriber=fake_transcriber, llm=fake_llm
+    )
     await pipeline.run_pipeline(db_session, meeting.id, ctx=ctx)
 
     transcript = await db_session.get(Transcript, meeting.id)
@@ -194,7 +197,7 @@ async def test_reprepare_skips_existing_normalized_object(
         (),
         {"model_name": "fake", "transcribe": lambda self, p, lang=None: None},
     )()
-    ctx = StageContext(storage=fake_storage, audio=audio, transcriber=transcriber)  # type: ignore[arg-type]
+    ctx = StageContext(storage=fake_storage, audio=audio, transcriber=transcriber, llm=transcriber)  # type: ignore[arg-type]
 
     meeting = await make_meeting(db_session, fake_storage)
     await pipeline.run_pipeline(db_session, meeting.id, stages=[JobStage.PREPARE], ctx=ctx)
@@ -403,7 +406,14 @@ async def test_status_endpoint_requires_ownership(
 
 
 def _sync_ctx(storage: FakeStorage, audio: object, transcriber: object) -> pipeline.StageContext:
-    return pipeline.StageContext(storage=storage, audio=audio, transcriber=transcriber)  # type: ignore[arg-type]
+    from tests.conftest import FakeLLMClient
+
+    return pipeline.StageContext(
+        storage=storage,
+        audio=audio,
+        transcriber=transcriber,
+        llm=FakeLLMClient(),  # type: ignore[arg-type]
+    )
 
 
 def test_sync_driver_completes_pipeline(fake_storage: FakeStorage) -> None:

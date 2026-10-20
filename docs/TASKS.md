@@ -36,11 +36,11 @@ Work one phase at a time. Tick boxes as you finish. Each phase ends with tests p
 - [x] Tests with a short fixture audio file and a fake transcriber
 
 ## Phase 5 — LLM analysis
-- [ ] `LLMClient` interface + Anthropic implementation, JSON output validated by Pydantic
-- [ ] Prompts in `app/services/prompts.py` (versioned constants)
-- [ ] Single-pass and map-reduce paths; dedupe action items
-- [ ] Persist summary and action items; set `suggested_title`
-- [ ] Tests with a fake LLM client and golden transcripts
+- [x] `LLMClient` interface + Anthropic implementation, JSON output validated by Pydantic
+- [x] Prompts in `app/services/prompts.py` (versioned constants)
+- [x] Single-pass and map-reduce paths; dedupe action items
+- [x] Persist summary and action items; set `suggested_title`
+- [x] Tests with a fake LLM client and golden transcripts
 
 ## Phase 6 — Notes UI
 - [ ] Meeting detail page: summary, key points, decisions, action items table, transcript with clickable timestamps, audio player seeking

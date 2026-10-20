@@ -222,9 +222,65 @@ built per job via `get_transcriber()`, so a worker process reuses one model acro
 it handles. `faster-whisper` is a core dependency; `openai` (the D6 provider) is an optional
 extra (`pip install .[openai]`) so it is only present when `TRANSCRIBER=openai` is used.
 
+## D35 — faster-whisper is imported lazily and the model is cached per process (Phase 4)
+`FasterWhisperTranscriber` imports `faster_whisper` and constructs `WhisperModel` on first
+`transcribe()` call, then caches it on the instance. The API process and the whole test
+suite therefore never import torch/ctranslate2 or download weights (D7). The transcriber is
+built per job via `get_transcriber()`, so a worker process reuses one model across the tasks
+it handles. `faster-whisper` is a core dependency; `openai` (the D6 provider) is an optional
+extra (`pip install .[openai]`) so it is only present when `TRANSCRIBER=openai` is used.
+
 ## D36 — "No speech detected" is a permanent failure (Phase 4)
 Whisper runs with `vad_filter=True`; if the recording yields no non-empty segments the
 transcribe stage raises `PermanentStageError` and the meeting is marked `failed` with a
 clear message rather than retrying forever. Silence, pure tones, and unreadable media all
 fall here. Verified live: a 440 Hz test tone was correctly rejected as "No speech detected"
 while a spoken clip transcribed cleanly.
+
+## D37 — Token budget uses a simple chars/4 estimator (Phase 5)
+`ANALYSIS_TOKEN_BUDGET` defaults to 20000 and `estimate_tokens` does `len(text) / 4` with
+no tokenizer dependency (ARCHITECTURE.md suggests "about 20k tokens"). The threshold is
+used to pick single-pass vs map-reduce (D38). Logs include the estimated count when
+routing to map-reduce; full transcript text is never logged at INFO level.
+
+## D38 — Map-reduce over 10-minute windows for long transcripts (Phase 5)
+When the estimated transcript exceeds the budget, `split_into_windows` groups consecutive
+segments into windows of `MAP_WINDOW_SEC` (default 600 s) starting at `index*window_sec`
+boundaries. Each window is summarized into a `PartialAnalysis` by a map call (with the same
+owner/date/null rules), and a single reduce call merges them. If the window logic would
+produce an empty window it is skipped; windows always include at least the segment that
+crosses the boundary so no content is lost. Deterministic dedupe of action items and
+decisions is re-enforced after the reduce step.
+
+## D39 — Exactly one retry on LLM JSON/schema validation failure (Phase 5)
+The model is asked for JSON-only output matching the Pydantic schema. If parsing or
+`model_validate` fails, `_complete_with_retry` catches `LLMValidationError`, logs a
+warning with the compact error, appends
+`"Your previous output was invalid: {error}. Return corrected JSON only."` to the user
+message, and retries once. A second failure propagates as `LLMValidationError` and the
+pipeline treats it as a `PermanentStageError` (D42). Transport/5xx/rate-limit errors raise
+`TransientLLMError` and are retried by the existing backoff mechanism.
+
+## D40 — Never invent owners or dates; resolve dates against meeting creation time (Phase 5)
+`ActionItemDraft.owner` is accepted as-is when spoken and coerced to `None` if empty
+whitespace appears. `due_date` is only accepted when the model resolves it to an ISO date
+(or emits `null`); `analysis_service` uses `meeting.created_at.date()` as `meeting_date`
+for relative-date resolution. `merge_action_items` deduplicates by description (case-
+insensitive), keeping the item with the earliest `source_start_sec`. Manual action items
+(`created_by_ai = false`) are preserved across re-runs; only AI items are replaced.
+
+## D41 — Analyze stage is idempotent (Phase 5)
+`notes_service.save_analysis` upserts the `summaries` row and deletes+re-inserts AI action
+items only (`DELETE ... WHERE created_by_ai = true`), so manual items created via
+`POST /meetings/{id}/action-items` survive a re-run. If `suggested_title` is non-empty the
+meeting title is updated (the DB default is the original filename). The pipeline core
+re-enters stages safely per Phase 3; re-running `analyze` is cheap and deterministic with
+a `FakeLLMClient`.
+
+## D42 — LLM errors are classified for retry semantics (Phase 5)
+`AnthropicLLMClient` / `OpenAICompatibleLLMClient` wrap transport failures as
+`TransientLLMError` (rate limit / timeout / network / 5xx) so `run_pipeline` retries with
+backoff. A schema/JSON parse failure becomes `LLMValidationError`, retried exactly once by
+`analysis_service` (D39), and if it persists the pipeline stage raises `PermanentStageError`
+and marks the meeting `failed` without wasting retry budget. Provider SDKs are imported
+lazily; `anthropic` is a core dependency, `openai` remains optional.
