@@ -55,10 +55,10 @@ Work one phase at a time. Tick boxes as you finish. Each phase ends with tests p
 - [x] Friendly error messages mapped from internal errors
 
 ## Phase 8 — Hardening and polish
-- [ ] Rate limiting on auth, upload size/type enforcement, CORS
-- [ ] `/readyz`, structured logs, optional Flower
-- [ ] Backend coverage over 70% on services; key frontend tests
-- [ ] Accessibility pass, responsive layout, dark mode
+- [x] Rate limiting on auth, upload size/type enforcement, CORS
+- [x] `/readyz`, structured logs, optional Flower
+- [x] Backend coverage over 70% on services; key frontend tests
+- [x] Accessibility pass, responsive layout, dark mode
 
 ## Phase 9 — Deploy
 - [ ] Follow `docs/DEPLOYMENT.md`; live URL and demo video in README
