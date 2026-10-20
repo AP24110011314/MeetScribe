@@ -45,6 +45,8 @@ exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+# FastAPI's Query/Body/Depends are meant to be called in argument defaults.
+ignore = ["B008"]
 
 [tool.mypy]
 python_version = "3.11"

@@ -12,6 +12,7 @@ from app.core.security import decode_token
 from app.db.models import User
 from app.db.session import get_session
 from app.services.auth import get_user_by_id
+from app.services.storage import StorageService, get_storage_service
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:
@@ -43,3 +44,11 @@ async def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def get_storage() -> StorageService:
+    """Storage dependency; overridden with a fake in tests."""
+    return get_storage_service()
+
+
+Storage = Annotated[StorageService, Depends(get_storage)]

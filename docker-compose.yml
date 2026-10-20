@@ -25,13 +25,16 @@ services:
       timeout: 3s
       retries: 10
 
-  # S3-compatible storage for local dev. See D13 in docs/DECISIONS.md.
+  # S3-compatible storage for local dev. See D13/D24 in docs/DECISIONS.md.
   localstack:
     image: localstack/localstack:3.8
     environment:
       SERVICES: s3
       DEFAULT_REGION: us-east-1
-      S3_SKIP_SIGNATURE_VALIDATION: "0"
+      # LocalStack's S3 otherwise rejects presigned PUTs from browser-style clients
+      # (D24). Presigned URL semantics are exercised for real; only validation is lax,
+      # and this is local dev only (production uses real AWS S3).
+      S3_SKIP_SIGNATURE_VALIDATION: "1"
     ports:
       - "9000:4566"
       - "9001:4566"

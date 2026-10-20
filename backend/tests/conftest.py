@@ -24,10 +24,38 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 # Long key avoids PyJWT's InsecureKeyLengthWarning in tests (not a real secret).
 os.environ.setdefault("JWT_SECRET", "test-secret-key-that-is-at-least-32-bytes-long")
 
-from app.api.deps import get_db  # noqa: E402
+from app.api.deps import get_db, get_storage  # noqa: E402
 from app.db import models  # noqa: E402,F401  (register tables on Base.metadata)
 from app.db.base import Base  # noqa: E402
 from app.main import create_app  # noqa: E402
+
+
+class FakeStorage:
+    """In-memory StorageService stand-in; no network calls in tests (AGENTS.md)."""
+
+    def __init__(self) -> None:
+        self.objects: dict[str, dict[str, object]] = {}
+        self.deleted: list[str] = []
+
+    def presign_put(self, key: str, content_type: str) -> str:
+        return f"http://fake-s3/put/{key}?ct={content_type}"
+
+    def presign_get(self, key: str) -> str:
+        return f"http://fake-s3/get/{key}"
+
+    def head_object(self, key: str) -> dict[str, object] | None:
+        return self.objects.get(key)
+
+    def object_exists(self, key: str) -> bool:
+        return key in self.objects
+
+    def delete_object(self, key: str) -> None:
+        self.deleted.append(key)
+        self.objects.pop(key, None)
+
+    def put(self, key: str, **metadata: object) -> None:
+        """Test helper simulating a completed browser upload."""
+        self.objects[key] = {"ContentLength": 1, **metadata}
 
 
 @pytest_asyncio.fixture
@@ -58,14 +86,20 @@ async def _clean_tables(engine: object) -> AsyncIterator[None]:
 
 
 @pytest_asyncio.fixture
-async def app(db_session: AsyncSession) -> AsyncIterator[FastAPI]:
-    """App with the DB dependency overridden to the test session."""
+async def fake_storage() -> FakeStorage:
+    return FakeStorage()
+
+
+@pytest_asyncio.fixture
+async def app(db_session: AsyncSession, fake_storage: FakeStorage) -> AsyncIterator[FastAPI]:
+    """App with the DB and storage dependencies overridden for tests."""
     application = create_app()
 
     async def _override_get_db() -> AsyncIterator[AsyncSession]:
         yield db_session
 
     application.dependency_overrides[get_db] = _override_get_db
+    application.dependency_overrides[get_storage] = lambda: fake_storage
     yield application
     application.dependency_overrides.clear()
 

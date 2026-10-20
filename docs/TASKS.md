@@ -17,10 +17,10 @@ Work one phase at a time. Tick boxes as you finish. Each phase ends with tests p
 - [x] Frontend: login/register pages, auth context, protected routes, API client with token refresh
 
 ## Phase 2 — Upload to S3
-- [ ] `StorageService` (boto3): presign PUT/GET, head_object, delete, works with MinIO
-- [ ] `POST /meetings`, `POST /meetings/{id}/complete` with validation
-- [ ] Frontend: drag-and-drop uploader with progress (XHR PUT to presigned URL), meetings list page
-- [ ] Tests with moto or MinIO test container
+- [x] `StorageService` (boto3): presign PUT/GET, head_object, delete, works with MinIO
+- [x] `POST /meetings`, `POST /meetings/{id}/complete` with validation
+- [x] Frontend: drag-and-drop uploader with progress (XHR PUT to presigned URL), meetings list page
+- [x] Tests with moto or MinIO test container
 
 ## Phase 3 — Async pipeline skeleton
 - [ ] Celery app, `process_meeting` chain with stub stages that update status

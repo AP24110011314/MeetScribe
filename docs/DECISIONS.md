@@ -111,3 +111,35 @@ exports only components (react-refresh rule).
 jsdom 25 under Node 26 does not expose `localStorage`, which broke token-store tests. The
 Vitest setup installs a minimal in-memory `Storage` shim only when the global is missing.
 Browsers are unaffected.
+
+## D20 — Upload validation rule (Phase 2)
+`POST /meetings` accepts a file when its `content_type` is in the allowed set
+(`audio/mpeg`, `audio/wav`, `audio/x-wav`, `audio/mp4`, `audio/m4a`, `audio/x-m4a`,
+`audio/webm`, `audio/ogg`, `video/mp4`, `video/webm`), or when the type is generic
+(`application/octet-stream`/empty) **and** the filename ends in an allowed extension. A
+disallowed concrete type (e.g. `application/pdf`) is rejected with 415 regardless of the
+filename. Oversize files are rejected with 413 using `MAX_UPLOAD_MB`. PRD F1 lists
+formats; browsers sometimes omit a precise type, hence the extension fallback.
+
+## D21 — Presign uses two boto3 clients (Phase 2)
+`S3_ENDPOINT_URL` (internal, e.g. `http://localstack:4566`) is used for `head_object` and
+`delete_object`; `S3_PUBLIC_ENDPOINT_URL` (`http://localhost:9000`) is used to build
+presigned URLs the browser can resolve. When both are equal, one client is reused. This
+keeps the Docker-internal hostname out of browser-facing URLs.
+
+## D22 — A generic type with a wrong extension is rejected (Phase 2)
+See D20: the octet-stream fallback requires a matching extension, so `notes.txt` as
+`application/octet-stream` is a 415. Both paths are covered by tests.
+
+## D23 — Ruff ignores B008 (Phase 2)
+FastAPI's `Query(...)`/`Depends(...)` are called in argument defaults by design, so the
+`B008` (function call in default) rule is disabled project-wide.
+
+## D24 — LocalStack runs with S3_SKIP_SIGNATURE_VALIDATION=1 (Phase 2)
+Presigned PUT URLs generated for the browser were rejected with `SignatureDoesNotMatch`
+by LocalStack's default S3 signature validation (reproduced with a bare boto3 presign +
+curl; ordinary signed boto3 requests worked). With `S3_SKIP_SIGNATURE_VALIDATION=1` the
+presigned PUT returns 200 and the object is stored. The app's presign/head/delete code is
+unchanged and correct — this is a LocalStack-specific dev accommodation. Production uses
+real AWS S3, which validates signatures normally. Verified end to end: create → presigned
+PUT → `head_object` → `queued`.
