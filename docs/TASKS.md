@@ -50,9 +50,9 @@ Work one phase at a time. Tick boxes as you finish. Each phase ends with tests p
 - [x] Empty, loading, and error states everywhere
 
 ## Phase 7 — Export, retry, delete
-- [ ] Markdown and PDF export (WeasyPrint or reportlab)
-- [ ] Retry failed meetings, delete with S3 cleanup
-- [ ] Friendly error messages mapped from internal errors
+- [x] Markdown and PDF export (WeasyPrint or reportlab)
+- [x] Retry failed meetings, delete with S3 cleanup
+- [x] Friendly error messages mapped from internal errors
 
 ## Phase 8 — Hardening and polish
 - [ ] Rate limiting on auth, upload size/type enforcement, CORS
