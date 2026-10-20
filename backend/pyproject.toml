@@ -20,9 +20,14 @@ dependencies = [
     "email-validator>=2.2.0",    # pydantic EmailStr validation
     "faster-whisper>=1.0.0",     # default local transcriber (AGENTS.md, Phase 4)
     "anthropic>=0.25.0",         # default LLM provider (AGENTS.md, Phase 5)
+    "markdown>=3.6.0",           # Markdown export (Phase 7)
 ]
 
 [project.optional-dependencies]
+# PDF export (Phase 7): install with pip install ".[pdf]"
+pdf = [
+    "reportlab>=4.2.0",
+]
 # Optional Whisper provider (D6): only installed when TRANSCRIBER=openai is used.
 openai = [
     "openai>=1.30.0",  # OpenAI Whisper API transcriber (optional provider)
@@ -61,7 +66,7 @@ files = ["app"]
 warn_unreachable = true
 
 [[tool.mypy.overrides]]
-module = ["celery.*", "boto3.*", "botocore.*", "faster_whisper.*", "openai.*", "anthropic.*"]
+module = ["celery.*", "boto3.*", "botocore.*", "faster_whisper.*", "openai.*", "anthropic.*", "reportlab.*", "markdown.*"]
 ignore_missing_imports = true
 
 # Celery's task decorators ship no types, so their return value is untyped by nature.

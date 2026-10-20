@@ -101,9 +101,6 @@ async def list_meetings(
     )
 
 
-
-
-
 @router.get("/{meeting_id}", response_model=MeetingDetail)
 async def get_meeting_detail(
     meeting: OwnedMeeting,
@@ -215,8 +212,6 @@ async def create_action_item(
     return ActionItemResponse.model_validate(item)
 
 
-
-
 @router.get("/action-items", response_model=list[ActionItemResponse])
 async def list_all_action_items(
     current_user: CurrentUser,
@@ -245,7 +240,6 @@ async def update_action_item(
     current_user: CurrentUser,
 ) -> ActionItemResponse:
 
-
     stmt = (
         select(ActionItem)
         .join(Meeting, ActionItem.meeting_id == Meeting.id)
@@ -267,7 +261,6 @@ async def delete_action_item(
     current_user: CurrentUser,
 ) -> Response:
 
-
     stmt = (
         select(ActionItem)
         .join(Meeting, ActionItem.meeting_id == Meeting.id)
@@ -279,3 +272,36 @@ async def delete_action_item(
         raise APIError(404, "Action item not found", "ACTION_ITEM_NOT_FOUND")
     await meetings_service.delete_action_item(session, item)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{meeting_id}/export")
+async def export_meeting(
+    meeting: OwnedMeeting,
+    session: DbSession,
+    format: str = Query("md"),
+) -> Response:
+    from fastapi import Response
+
+    from app.services import export as export_service
+
+    (
+        meeting_obj,
+        transcript_row,
+        summary_row,
+        action_items,
+    ) = await meetings_service.get_meeting_detail_full(session, meeting)
+    if format == "pdf":
+        content = export_service.render_pdf(meeting_obj, summary_row, action_items, transcript_row)
+        return Response(
+            content=content,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{meeting_obj.id}.pdf"'},
+        )
+    content_md = export_service.render_markdown(
+        meeting_obj, summary_row, action_items, transcript_row
+    )
+    return Response(
+        content=content_md.encode("utf-8"),
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{meeting_obj.id}.md"'},
+    )
