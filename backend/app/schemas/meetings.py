@@ -73,6 +73,7 @@ class MeetingDetail(BaseModel):
     language: str | None
     created_at: datetime
     error_message: str | None
+    transcript: TranscriptResponse | None = None
     summary: SummaryResponse | None = None
     action_items: list[ActionItemResponse] = []
 
@@ -91,3 +92,27 @@ class MeetingStatusResponse(BaseModel):
     stage: JobStage | None
     progress_pct: int
     error_message: str | None = None
+
+
+class UpdateMeetingRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+
+
+class UpdateActionItemRequest(BaseModel):
+    description: str | None = Field(default=None, min_length=1, max_length=2000)
+    owner: str | None = Field(default=None, max_length=200)
+    due_date: date | None = None
+    priority: Priority | None = None
+    status: ActionItemStatus | None = None
+
+
+class CreateActionItemRequest(BaseModel):
+    description: str = Field(min_length=1, max_length=2000)
+    owner: str | None = Field(default=None, max_length=200)
+    due_date: date | None = None
+    priority: Priority = Priority.MEDIUM
+
+
+class AudioUrlResponse(BaseModel):
+    url: str
+    expires_in: int

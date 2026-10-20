@@ -21,9 +21,9 @@ ANALYSIS_SYSTEM_PROMPT_V1 = (
     "  - description: imperative sentence, self-contained.\n"
     "  - owner: the person's name exactly as spoken, or null if not stated. Never guess.\n"
     "  - due_date: ISO date (YYYY-MM-DD) only if a specific date or a resolvable relative\n"
-    "    date (\"next Friday\") is stated; use the provided meeting_date to resolve. "
+    '    date ("next Friday") is stated; use the provided meeting_date to resolve. '
     "Otherwise null.\n"
-    "  - priority: \"high\" if urgency is stated, \"low\" if described as optional, "
+    '  - priority: "high" if urgency is stated, "low" if described as optional, '
     'else "medium".\n'
     "  - source_start_sec: the start time in seconds of the segment where it was said.\n"
     "- suggested_title: 3 to 8 words.\n"
