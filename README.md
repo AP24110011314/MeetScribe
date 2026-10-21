@@ -44,122 +44,40 @@ See `docs/ARCHITECTURE.md` for full details.
 
 ## Prerequisites
 
-| Tool | Version | Check Command | Docker Path | No-Docker Path |
-|------|---------|---------------|-------------|----------------|
-| Docker Desktop | 4.x+ | `docker --version` | ✅ Required | ❌ |
-| Docker Compose | 2.x+ | `docker compose version` | ✅ Required | ❌ |
-| Git | 2.x+ | `git --version` | ✅ Required | ✅ Required |
-| Python | 3.11 | `python3.11 --version` | ❌ | ✅ Required |
-| Node.js | 20+ | `node --version` | ❌ | ✅ Required |
-| PostgreSQL | 16 | `psql --version` | ❌ | ✅ Required |
-| Redis | 7+ | `redis-cli --version` | ❌ | ✅ Required |
-| ffmpeg | 6+ | `ffmpeg -version` | ✅ In container | ✅ Required |
-| MinIO / LocalStack | — | — | ✅ In container | ✅ Required (via Docker) |
+| Tool | Version | Check Command |
+|------|---------|---------------|
+| Git | 2.x+ | `git --version` |
+| Python | 3.11 | `python3.11 --version` |
+| Node.js | 20+ | `node --version` |
+| PostgreSQL | 16 | `psql --version` |
+| Redis | 7+ | `redis-cli --version` |
+| ffmpeg | 6+ | `ffmpeg -version` |
+| LocalStack (S3) | — | via Docker |
 
-**Minimum RAM**: 4 GB for Docker (Whisper `small` model ~2 GB); 8 GB recommended for local Whisper.
+**Minimum RAM**: 8 GB recommended for local Whisper.
 
 ---
 
-## Option A: Run with Docker (Recommended)
+## Quick Start (Local Development)
 
-This is the easiest way to run the full stack including all dependencies.
+This runs the backend, worker, beat, and frontend directly on your machine for faster iteration. PostgreSQL, Redis, and LocalStack (S3) run as local services.
 
-### 1. Clone the repository
+**Assumes:** macOS on Apple Silicon with Homebrew. Adjust commands for other platforms.
 
-**Run in:** `meetscribe/` (project root)
-```bash
-git clone https://github.com/your-org/meetscribe.git
-cd meetscribe
-```
+### 1. Install prerequisites
 
-### 2. Configure environment variables
-
-**Run in:** `meetscribe/` (project root)
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and set **at minimum**:
-- `LLM_API_KEY` — Your Anthropic API key (get one at [console.anthropic.com](https://console.anthropic.com))
-- `JWT_SECRET` — A strong random string (generate with `openssl rand -hex 32`)
-
-> **Note**: The default `.env.example` has sensible defaults for local Docker development. You only need to change `LLM_API_KEY` and `JWT_SECRET` to get started.
-
-### 3. Start all services
-
-**Run in:** `meetscribe/` (project root)
-```bash
-docker compose up --build
-```
-
-This will start (in order):
-1. **PostgreSQL** on port 5432
-2. **Redis** on port 6379
-3. **LocalStack (S3)** on ports 9000 (S3 API) and 9001 (console)
-4. **Migrate** (one-shot: runs `alembic upgrade head`)
-5. **Backend API** on port 8000
-6. **Celery Worker** (background processing)
-7. **Celery Beat** (scheduled tasks)
-8. **Frontend** on port 5173
-
-### 4. Access the application
-
-| Service | URL |
-|---------|-----|
-| **Frontend (UI)** | http://localhost:5173 |
-| **API Docs (Swagger)** | http://localhost:8000/docs |
-| **API Health Check** | http://localhost:8000/healthz |
-| **API Readiness Check** | http://localhost:8000/readyz |
-| **MinIO Console** | http://localhost:9001 (user: `minioadmin`, pass: `minioadmin`) |
-
-### 5. Create an account and start using MeetScribe
-
-1. Open http://localhost:5173
-2. Click **Register** to create an account
-3. Log in and upload a meeting recording (mp3, wav, m4a, mp4, webm, ogg — up to 500 MB)
-4. Wait for processing (status updates in real-time)
-5. View the transcript, summary, decisions, and action items
-
-### 6. Stop the application
-
-**Run in:** `meetscribe/` (project root)
-```bash
-# Stop containers (preserves data)
-docker compose down
-
-# Stop and remove all data (database, S3 uploads, etc.)
-docker compose down -v
-```
-
----
-
-## Option B: Run without Docker (Local Development)
-
-Use this if you want to run the backend/frontend directly on your machine for faster iteration.
-
-**Assumes:** macOS on Apple Silicon (M2) with Homebrew.
-
-### 1. Stop any conflicting Docker containers
-
-```bash
-docker compose down -v 2>/dev/null || true
-```
-
-### 2. Install prerequisites
-
-**Run in:** `meetscribe/` (project root)
 ```bash
 # Homebrew packages
-brew install python@3.11 node@20 postgresql@16 redis ffmpeg
+brew install python@3.11 node@20 postgresql@16 redis ffmpeg awscli
 
-# Start services
+# Start PostgreSQL and Redis
 brew services start postgresql@16 redis
 ```
 
-### 3. Create database and user
+### 2. Create database and user
 
 ```bash
-# Create database (adjust username if needed)
+# Create database
 createdb -U $(whoami) meetscribe
 
 # Create DB user and grant privileges
@@ -168,7 +86,7 @@ psql -U $(whoami) -d meetscribe -c "GRANT ALL PRIVILEGES ON DATABASE meetscribe 
 psql -U $(whoami) -d meetscribe -c "ALTER USER meet CREATEDB;"
 ```
 
-### 4. Start LocalStack (S3) via Docker
+### 3. Start LocalStack (S3) via Docker
 
 **Terminal 1** (stays running):
 ```bash
@@ -177,17 +95,17 @@ docker run -d --name localstack -p 4566:4566 -p 4510-4559:4510-4559 \
   localstack/localstack:3.8
 ```
 
-Create the bucket:
+Create the bucket (wait ~10s for LocalStack to start):
 ```bash
-# Wait ~10s for LocalStack to start, then:
 AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin \
 aws --endpoint-url=http://localhost:4566 s3 mb s3://meetscribe
 ```
 
-### 5. Set up the backend
+### 4. Set up the backend
 
-**Run in:** `meetscribe/backend/`
 ```bash
+cd backend
+
 # Create virtual environment
 python3.11 -m venv .venv
 source .venv/bin/activate
@@ -234,7 +152,9 @@ EOF
 alembic upgrade head
 ```
 
-### 6. Start each process in its own terminal
+> **Important**: Edit `backend/.env` and set `LLM_API_KEY` to your Anthropic API key (get one at [console.anthropic.com](https://console.anthropic.com)). Without it, the analysis stage will fail.
+
+### 5. Start each process in its own terminal
 
 **Terminal 2** — API (stays running):
 ```bash
@@ -258,10 +178,12 @@ source .venv/bin/activate
 celery -A app.workers.celery_app:celery_app beat --loglevel=INFO
 ```
 
-### 7. Set up the frontend
+### 6. Set up the frontend
 
-**Run in:** `meetscribe/frontend/`
+**Terminal 5** (or new tab):
 ```bash
+cd frontend
+
 # Install dependencies
 npm install
 
@@ -269,7 +191,7 @@ npm install
 npm run dev
 ```
 
-### 8. Access the application
+### 7. Access the application
 
 | Service | URL |
 |---------|-----|
@@ -277,34 +199,50 @@ npm run dev
 | **API Docs (Swagger)** | http://localhost:8000/docs |
 | **API Health Check** | http://localhost:8000/healthz |
 | **API Readiness Check** | http://localhost:8000/readyz |
+| **LocalStack S3** | http://localhost:4566 |
 
-### Key differences from Docker
+### 8. Create an account and start using MeetScribe
 
-| Variable | Docker | No-Docker |
-|----------|--------|-----------|
-| `DATABASE_URL` | `postgresql+asyncpg://meet:meet@postgres:5432/meetscribe` | `postgresql+asyncpg://meet:meet@localhost:5432/meetscribe` |
-| `REDIS_URL` | `redis://redis:6379/0` | `redis://localhost:6379/0` |
-| `S3_ENDPOINT_URL` | `http://localstack:4566` | `http://localhost:4566` |
-| `S3_PUBLIC_ENDPOINT_URL` | `http://localhost:9000` | `http://localhost:4566` |
-| Celery pool | `prefork` (default) | `--pool=solo` (macOS workaround) |
+1. Open http://localhost:5173
+2. Click **Register** to create an account
+3. Log in and upload a meeting recording (mp3, wav, m4a, mp4, webm, ogg — up to 500 MB)
+4. Wait for processing (status updates in real-time)
+5. View the transcript, summary, decisions, and action items
+
+---
+
+## Using Make Commands
+
+The `Makefile` provides convenient shortcuts:
+
+```bash
+# One-time setup
+make setup
+
+# Run migrations
+make migrate
+
+# Start services (each in its own terminal)
+make backend-dev
+make worker-dev
+make beat-dev
+make frontend-dev
+
+# Testing and linting
+make test
+make lint
+make fmt
+make typecheck
+```
 
 ---
 
 ## Run the Tests
 
-### Backend tests (Docker)
+### Backend tests
 
-**Run in:** `meetscribe/` (project root)
 ```bash
-docker compose up -d
-docker compose exec api pip install -e ".[dev]" -q
-docker compose exec api python -m pytest -q
-```
-
-### Backend tests (No-Docker)
-
-**Run in:** `meetscribe/backend/`
-```bash
+cd backend
 source .venv/bin/activate
 TEST_DATABASE_URL=postgresql+asyncpg://meet:meet@localhost:5432/meetscribe_test \
 JWT_SECRET=test-secret-key-that-is-at-least-32-bytes-long-for-testing \
@@ -313,8 +251,8 @@ pytest -q
 
 ### Frontend tests
 
-**Run in:** `meetscribe/frontend/`
 ```bash
+cd frontend
 npm test
 ```
 
@@ -322,6 +260,7 @@ npm test
 
 **Backend** (from `backend/`):
 ```bash
+source .venv/bin/activate
 ruff check . && ruff format . && mypy app
 ```
 
@@ -336,7 +275,6 @@ npm run lint && npm run typecheck
 
 Use the smoke test script to run an end-to-end test:
 
-**Run in:** `meetscribe/` (project root)
 ```bash
 # Generate a test audio file (macOS)
 say -v Samantha "Hello team. This is a test meeting. John will update the documentation by Friday. Sarah will review the pull request by tomorrow. Meeting adjourned." -o /tmp/test_meeting.aiff
@@ -382,8 +320,7 @@ Without `LLM_API_KEY`, the test will fail at the analysis stage with `LLM_API_KE
 | API Docs | http://localhost:8000/docs | — |
 | Health Check | http://localhost:8000/healthz | — |
 | Readiness Check | http://localhost:8000/readyz | — |
-| MinIO Console (Docker) | http://localhost:9001 | minioadmin / minioadmin |
-| LocalStack S3 (No-Docker) | http://localhost:4566 | minioadmin / minioadmin |
+| LocalStack S3 | http://localhost:4566 | minioadmin / minioadmin |
 | PostgreSQL | localhost:5432 | meet / meet / meetscribe |
 | Redis | localhost:6379 | — |
 
@@ -391,28 +328,145 @@ Without `LLM_API_KEY`, the test will fail at the analysis stage with `LLM_API_KE
 
 ## Environment Variables
 
-| Name | Example Value | Required | Description | Docker vs No-Docker |
-|------|---------------|----------|-------------|---------------------|
-| `ENV` | `development` | No | Environment name | Same |
-| `DATABASE_URL` | `postgresql+asyncpg://meet:meet@postgres:5432/meetscribe` | Yes | PostgreSQL connection string | Host: `postgres` (Docker) vs `localhost` (local) |
-| `REDIS_URL` | `redis://redis:6379/0` | Yes | Redis connection string | Host: `redis` (Docker) vs `localhost` (local) |
-| `JWT_SECRET` | `dev-secret-key-...` | **Yes** | Secret for JWT signing | Same (use strong value) |
-| `JWT_ALGORITHM` | `HS256` | No | JWT algorithm | Same |
-| `S3_ENDPOINT_URL` | `http://localstack:4566` | Yes | S3 API endpoint (internal) | `localstack:4566` (Docker) vs `localhost:4566` (local) |
-| `S3_PUBLIC_ENDPOINT_URL` | `http://localhost:9000` | Yes | S3 URL for browser presigned URLs | `localhost:9000` (Docker) vs `localhost:4566` (local) |
-| `S3_BUCKET` | `meetscribe` | Yes | S3 bucket name | Same |
-| `S3_ACCESS_KEY` | `minioadmin` | Yes | S3 access key | Same |
-| `S3_SECRET_KEY` | `minioadmin` | Yes | S3 secret key | Same |
-| `S3_REGION` | `us-east-1` | Yes | S3 region | Same |
-| `TRANSCRIBER` | `faster_whisper` | No | `faster_whisper` or `openai` | Same |
-| `WHISPER_MODEL` | `small` | No | Model size (tiny/base/small/medium/large-v3) | Same |
-| `WHISPER_DEVICE` | `cpu` | No | `cpu` or `cuda` | Same |
-| `WHISPER_COMPUTE_TYPE` | `int8` | No | Compute type for faster-whisper | Same |
-| `LLM_PROVIDER` | `anthropic` | No | `anthropic` or `openai` | Same |
-| `LLM_API_KEY` | `sk-ant-...` | **Yes** | Anthropic/OpenAI API key | Same |
-| `LLM_MODEL` | `claude-sonnet-4-6` | No | LLM model name | Same |
-| `MAX_UPLOAD_MB` | `500` | No | Max upload size in MB | Same |
-| `CORS_ORIGINS` | `http://localhost:5173` | No | Allowed CORS origins | Same |
+### Required Variables
+
+| Name | Example Value | Description |
+|------|---------------|-------------|
+| `JWT_SECRET` | `dev-secret-key-that-is-at-least-32-bytes-long-for-testing` | **Required**. Secret for signing JWT tokens. Generate with `openssl rand -hex 32`. Must be at least 32 characters. |
+| `LLM_API_KEY` | `sk-ant-...` | **Required**. Anthropic API key from [console.anthropic.com](https://console.anthropic.com). Without this, the analysis stage will fail. |
+
+### Database & Cache
+
+| Name | Example Value | Description |
+|------|---------------|-------------|
+| `DATABASE_URL` | `postgresql+asyncpg://meet:meet@localhost:5432/meetscribe` | PostgreSQL async connection string. Uses `meet` user/password created during setup. |
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection for Celery broker and result backend. |
+
+### S3 Storage (LocalStack)
+
+| Name | Example Value | Description |
+|------|---------------|-------------|
+| `S3_ENDPOINT_URL` | `http://localhost:4566` | Internal S3 API endpoint (used by backend/worker for head_object, delete). |
+| `S3_PUBLIC_ENDPOINT_URL` | `http://localhost:4566` | Public S3 endpoint for browser presigned URLs. Must be reachable from your browser. |
+| `S3_BUCKET` | `meetscribe` | S3 bucket name. Created during LocalStack setup. |
+| `S3_ACCESS_KEY` | `minioadmin` | S3 access key (LocalStack default). |
+| `S3_SECRET_KEY` | `minioadmin` | S3 secret key (LocalStack default). |
+| `S3_REGION` | `us-east-1` | S3 region (LocalStack default). |
+
+> **Note**: For local development with LocalStack, both `S3_ENDPOINT_URL` and `S3_PUBLIC_ENDPOINT_URL` point to `localhost:4566`. In production with real AWS S3, `S3_ENDPOINT_URL` would be empty (uses AWS default) and `S3_PUBLIC_ENDPOINT_URL` would be your S3 bucket URL.
+
+### Transcription Settings
+
+| Name | Example Value | Description |
+|------|---------------|-------------|
+| `TRANSCRIBER` | `faster_whisper` | Transcription provider: `faster_whisper` (local, default) or `openai` (OpenAI Whisper API). |
+| `WHISPER_MODEL` | `small` | Model size for faster-whisper: `tiny`, `base`, `small`, `medium`, `large-v3`. Larger = more accurate but slower/more memory. |
+| `WHISPER_DEVICE` | `cpu` | Device for inference: `cpu` or `cuda` (if GPU available). |
+| `WHISPER_COMPUTE_TYPE` | `int8` | Compute type for faster-whisper: `int8`, `int8_float16`, `float16`, `float32`. `int8` is fastest on CPU. |
+| `TRANSCRIBE_LANGUAGE` | `en` | Optional: Force language (ISO 639-1 code). Empty = auto-detect. |
+| `AUDIO_CHUNK_SECONDS` | `1800` | Chunk long audio into N-second windows (default 30 min). Set to 0 to disable chunking. |
+
+### OpenAI Whisper API (when `TRANSCRIBER=openai`)
+
+| Name | Example Value | Description |
+|------|---------------|-------------|
+| `OPENAI_API_KEY` | `sk-...` | OpenAI API key (required if using OpenAI Whisper). |
+| `OPENAI_WHISPER_MODEL` | `whisper-1` | OpenAI Whisper model name. |
+
+### LLM Analysis Settings
+
+| Name | Example Value | Description |
+|------|---------------|-------------|
+| `LLM_PROVIDER` | `anthropic` | LLM provider: `anthropic` (default) or `openai`. |
+| `LLM_MODEL` | `claude-sonnet-4-6` | Model name for the selected provider. |
+| `ANALYSIS_TOKEN_BUDGET` | `20000` | Estimated token budget for single-pass analysis. Above this, map-reduce is used. |
+| `MAP_WINDOW_SEC` | `600` | Window size in seconds for map-reduce (default 10 min). |
+
+### Pipeline & Upload Settings
+
+| Name | Example Value | Description |
+|------|---------------|-------------|
+| `MAX_UPLOAD_MB` | `500` | Maximum upload size in MB. |
+| `PIPELINE_MAX_RETRIES` | `3` | Max retries for transient pipeline failures. |
+| `STUCK_MEETING_MINUTES` | `60` | Minutes before a stuck meeting is marked failed by the beat task. |
+| `WORKER_TEMP_DIR` | `/tmp/meetscribe` | Temporary directory for audio processing. |
+| `CORS_ORIGINS` | `http://localhost:5173` | Allowed CORS origins for the API. |
+
+### Auth Settings (usually defaults work)
+
+| Name | Example Value | Description |
+|------|---------------|-------------|
+| `ENV` | `development` | Environment name. |
+| `JWT_ALGORITHM` | `HS256` | JWT signing algorithm. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | Access token lifetime. |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token lifetime. |
+
+---
+
+## Generating Secrets
+
+```bash
+# Generate a secure JWT_SECRET (run once)
+openssl rand -hex 32
+
+# Get Anthropic API key
+# Visit: https://console.anthropic.com
+```
+
+---
+
+## Complete backend/.env Example
+
+```bash
+# backend/.env
+ENV=development
+DATABASE_URL=postgresql+asyncpg://meet:meet@localhost:5432/meetscribe
+REDIS_URL=redis://localhost:6379/0
+
+# Generate with: openssl rand -hex 32
+JWT_SECRET=your-generated-32-char-secret-here
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=15
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# LocalStack S3 (started via docker)
+S3_ENDPOINT_URL=http://localhost:4566
+S3_PUBLIC_ENDPOINT_URL=http://localhost:4566
+S3_BUCKET=meetscribe
+S3_ACCESS_KEY=minioadmin
+S3_SECRET_KEY=minioadmin
+S3_REGION=us-east-1
+
+# Transcription: faster-whisper (local)
+TRANSCRIBER=faster_whisper
+WHISPER_MODEL=small
+WHISPER_DEVICE=cpu
+WHISPER_COMPUTE_TYPE=int8
+TRANSCRIBE_LANGUAGE=
+AUDIO_CHUNK_SECONDS=1800
+
+# OpenAI Whisper (optional, used when TRANSCRIBER=openai)
+OPENAI_API_KEY=
+OPENAI_WHISPER_MODEL=whisper-1
+
+# Worker
+WORKER_TEMP_DIR=/tmp/meetscribe
+
+# LLM: Anthropic (required for analysis)
+LLM_PROVIDER=anthropic
+LLM_API_KEY=your-anthropic-api-key-here
+LLM_MODEL=claude-sonnet-4-6
+ANALYSIS_TOKEN_BUDGET=20000
+MAP_WINDOW_SEC=600
+
+# Pipeline
+MAX_UPLOAD_MB=500
+PIPELINE_MAX_RETRIES=3
+STUCK_MEETING_MINUTES=60
+
+# CORS
+CORS_ORIGINS=http://localhost:5173
+```
 
 ---
 
@@ -420,33 +474,21 @@ Without `LLM_API_KEY`, the test will fail at the analysis stage with `LLM_API_KE
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `port already in use` (5432, 6379, 9000, 8000, 5173) | Local PostgreSQL/Redis/MinIO running | `brew services stop postgresql@16 redis` or `docker stop postgres redis minio` |
-| LocalStack health check fails | LocalStack takes 30-60s to start | Wait longer; check `docker compose logs -f localstack` |
+| `port already in use` (5432, 6379, 4566, 8000, 5173) | Local PostgreSQL/Redis/LocalStack running | `brew services stop postgresql@16 redis` or `docker stop localstack` |
+| LocalStack health check fails | LocalStack takes 30-60s to start | Wait longer; check `docker logs localstack` |
 | `ModuleNotFoundError` / import errors | Dependencies not installed | `cd backend && pip install -e ".[dev]"` |
 | `alembic: command not found` | Virtual env not activated | `cd backend && source .venv/bin/activate && pip install -e ".[dev]"` |
 | Database connection refused | PostgreSQL not running or wrong `DATABASE_URL` | Ensure PostgreSQL running; check `DATABASE_URL` matches setup |
 | `npm install` fails | Node modules corrupted | `cd frontend && rm -rf node_modules package-lock.json && npm install` |
-| Presigned URL fails | `S3_PUBLIC_ENDPOINT_URL` not reachable from browser | Docker: `http://localhost:9000`; Local: `http://localhost:4566` |
-| Whisper model download slow | First run downloads ~1 GB model | Use named volume for model cache (Docker); model caches in `~/.cache/huggingface` (local) |
-| ARM/Apple silicon build issues | Some wheels not available | Use `python:3.11-slim` base image; all deps now have arm64 wheels |
-| Docker out of memory | Whisper model + containers exceed RAM | Increase Docker Desktop memory to 6+ GB; or use `TRANSCRIBER=openai` |
-| Stuck jobs (status stays queued) | Worker not running or crashed | Check `docker compose logs worker`; ensure `LLM_API_KEY` is set |
+| Presigned URL fails | `S3_PUBLIC_ENDPOINT_URL` not reachable from browser | Ensure LocalStack is running on port 4566 |
+| Whisper model download slow | First run downloads ~1 GB model | Model caches in `~/.cache/huggingface` |
+| Stuck jobs (status stays queued) | Worker not running or crashed | Check worker logs; ensure `LLM_API_KEY` is set |
 | Celery task handler error on macOS | Prefork pool not supported | Use `--pool=solo` for worker on macOS |
 
 ---
 
 ## Stop and Reset
 
-### Docker
-```bash
-# Stop (keep data)
-docker compose down
-
-# Full reset (wipe everything)
-docker compose down -v
-```
-
-### No-Docker
 ```bash
 # Stop processes
 pkill -f "uvicorn app.main:app"

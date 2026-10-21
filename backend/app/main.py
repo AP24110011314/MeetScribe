@@ -43,6 +43,7 @@ def create_app() -> FastAPI:
 
     app.include_router(api_router, prefix="/api/v1")
 
+    @app.get("/health", tags=["system"])
     @app.get("/healthz", tags=["system"])
     async def healthz() -> dict[str, str]:
         """Liveness probe: process is up and serving requests."""
