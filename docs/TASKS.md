@@ -16,9 +16,9 @@ Work one phase at a time. A phase is done only when every **gate** command was r
 - [x] **Gate:** `pytest tests/test_auth.py tests/test_isolation.py tests/test_rate_limit.py` pass; manual curl register and login on port 8000
 
 ## Phase 2: Storage and upload (F02)
-- [ ] `StorageService` with `s3` (boto3, presign, head, delete) and `local` backends, dev-storage routes
-- [ ] `POST /meetings`, `POST /meetings/{id}/complete` with validation
-- [ ] **Gate:** `pytest tests/test_upload.py tests/test_storage_local.py` pass; real PUT of a file to MinIO via presigned URL verified with curl; same in `local` mode
+- [x] `StorageService` with `s3` (boto3, presign, head, delete) and `local` backends, dev-storage routes
+- [x] `POST /meetings`, `POST /meetings/{id}/complete` with validation
+- [x] **Gate:** `pytest tests/test_upload.py tests/test_storage_local.py` pass; real PUT of a file to MinIO via presigned URL verified with curl; same in `local` mode
 
 ## Phase 3: Async pipeline skeleton (F03, F19)
 - [ ] Celery app, `process_meeting` with stub stages, status and progress updates, jobs rows

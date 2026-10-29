@@ -18,3 +18,18 @@ This file records non-obvious technical decisions, assumptions, and rationales t
    - When `STORAGE_BACKEND=local`, files reside in `.data/uploads/` and access is mediated via signed tokens through `/api/v1/dev-storage` endpoints.
    - When `STORAGE_BACKEND=s3`, the browser uploads directly to MinIO/S3 using presigned PUT URLs, and the API server never streams the raw audio.
 
+## Phase 1: Data Model and Auth
+1. **NullPool in Test Async Engine**:
+   - `asyncpg` combined with `pytest-asyncio` function-scoped loops raises `RuntimeError: Event loop is closed` if connections are pooled across tests. `NullPool` ensures each test opens and closes its own connection cleanly.
+2. **In-Memory Rate Limiter Reset in Test Fixture**:
+   - `slowapi` tracks client IP (`127.0.0.1`). In unit test runs with numerous requests, rate limits accumulated and caused subsequent test failures without resetting `limiter` between test functions.
+
+## Phase 2: Storage and Upload
+1. **Dual Boto3 Client Endpoints (Internal vs Presigned)**:
+   - In containerized or split-networking dev setups, server-side calls connect to `S3_ENDPOINT_URL` (e.g. `http://localhost:9000`), while browser clients connect to `S3_PUBLIC_ENDPOINT_URL`. The storage service instantiates both internal and presign clients.
+2. **Signed Token URLs for Dev Storage**:
+   - Dev-storage uses `itsdangerous.URLSafeTimedSerializer` with salt `dev-storage` to generate secure, tamper-proof, short-lived (15 min) tokens containing the target file key and action (`upload` or `download`).
+3. **HTTP 206 Partial Content in Dev-Storage**:
+   - Waveform renderers (wavesurfer.js) and standard HTML `<audio>` elements rely on RFC 7233 byte-range queries. The dev-storage download endpoint implements byte-range streaming for seamless local audio playback and seeking.
+
+
