@@ -1,0 +1,6 @@
+minio: minio server .data/minio --address :9000 --console-address :9001
+api: cd backend && .venv/bin/uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+worker: cd backend && .venv/bin/celery -A app.workers.celery_app worker --pool=solo --loglevel=info
+beat: cd backend && .venv/bin/celery -A app.workers.celery_app beat --loglevel=info
+frontend: cd frontend && npm run dev
+
