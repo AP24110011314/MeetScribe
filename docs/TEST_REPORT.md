@@ -16,7 +16,7 @@
 |---|---|---|---|---|
 | F01 | Register, login, refresh token, me (JWT, argon2) | PASS | test_auth.py, manual curl on port 8000 | 2026-10-29 |
 | F02 | Audio upload via presigned URL (S3/local) | PASS | test_upload.py, test_storage_local.py, manual curl PUT to MinIO & local dev-storage | 2026-10-29 |
-| F03 | Asynchronous processing with live status | PENDING | Phase 3 | |
+| F03 | Asynchronous processing with live status | PASS | test_pipeline.py, GET /meetings/{id}/status, live make dev queued->done | 2026-10-29 |
 | F04 | Audio normalization (16 kHz mono) and chunking | PENDING | Phase 4 | |
 | F05 | Whisper transcription with timestamps | PENDING | Phase 4 | |
 | F06 | Summary, key points, decisions | PENDING | Phase 5 | |
@@ -32,7 +32,7 @@
 | F16 | Delete meeting with storage cleanup | PENDING | Phase 6 | |
 | F17 | Retry failed meeting | PENDING | Phase 6 | |
 | F18 | Export notes to Markdown and PDF | PENDING | Phase 6 | |
-| F19 | Crash recovery: stuck jobs re-queued by reaper | PENDING | Phase 3 / Phase 9 | |
+| F19 | Crash recovery: stuck jobs re-queued by reaper | PASS | test_reaper.py, reaper re-queuing and max attempts failure verification | 2026-10-29 |
 | F20 | Health (/healthz) and readiness (/readyz) | PASS | test_healthz_endpoint, /healthz curl | 2026-10-29 |
 | F21 | Per-user data isolation (ownership checks 404) | PASS | test_isolation.py | 2026-10-29 |
 | F22 | Rate limiting on auth endpoints (slowapi) | PASS | test_rate_limit.py | 2026-10-29 |
@@ -53,7 +53,7 @@
 
 ## Summary Stats
 - Total Features: 36 (22 Backend/Product, 14 UI)
-- Passed: 5 (F01, F02, F20, F21, F22)
-- Pending: 31
+- Passed: 7 (F01, F02, F03, F19, F20, F21, F22)
+- Pending: 29
 - Failed: 0
 

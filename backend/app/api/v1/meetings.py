@@ -143,6 +143,29 @@ async def complete_meeting_upload(
     await db.commit()
     await db.refresh(meeting)
 
+    # 4. Enqueue background processing pipeline
+    from app.workers.tasks import process_meeting
+
+    process_meeting.delay(str(meeting.id))
+
+    return MeetingStatusResponse(
+        meeting_id=meeting.id,
+        status=meeting.status,
+        stage=meeting.stage,
+        progress_pct=meeting.progress_pct,
+        error_message=meeting.error_message,
+        process_attempts=meeting.process_attempts,
+    )
+
+
+@router.get(
+    "/{meeting_id}/status",
+    response_model=MeetingStatusResponse,
+    summary="Get meeting processing status and progress",
+)
+async def get_meeting_status(
+    meeting: Annotated[Meeting, Depends(get_owned_meeting)],
+) -> MeetingStatusResponse:
     return MeetingStatusResponse(
         meeting_id=meeting.id,
         status=meeting.status,

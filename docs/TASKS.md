@@ -21,10 +21,10 @@ Work one phase at a time. A phase is done only when every **gate** command was r
 - [x] **Gate:** `pytest tests/test_upload.py tests/test_storage_local.py` pass; real PUT of a file to MinIO via presigned URL verified with curl; same in `local` mode
 
 ## Phase 3: Async pipeline skeleton (F03, F19)
-- [ ] Celery app, `process_meeting` with stub stages, status and progress updates, jobs rows
-- [ ] `acks_late`, retries, claim-by-UPDATE idempotency, reaper beat task
-- [ ] `GET /meetings/{id}/status`
-- [ ] **Gate:** `pytest tests/test_pipeline.py tests/test_reaper.py` pass; with `make dev` an uploaded file moves queued → done via stubs
+- [x] Celery app, `process_meeting` with stub stages, status and progress updates, jobs rows
+- [x] `acks_late`, retries, claim-by-UPDATE idempotency, reaper beat task
+- [x] `GET /meetings/{id}/status`
+- [x] **Gate:** `pytest tests/test_pipeline.py tests/test_reaper.py` pass; with `make dev` an uploaded file moves queued → done via stubs
 
 ## Phase 4: Audio and transcription (F04, F05)
 - [ ] `AudioService` (ffprobe, normalize, chunk), `Transcriber` interface with faster-whisper, openai, and fake

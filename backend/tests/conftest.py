@@ -2,8 +2,9 @@ from collections.abc import AsyncGenerator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
@@ -19,11 +20,23 @@ TestingSessionLocal = async_sessionmaker(
     autoflush=False,
 )
 
+test_sync_engine = create_engine(settings.TEST_DATABASE_URL_SYNC, poolclass=NullPool)
+TestSyncSessionLocal = sessionmaker(
+    bind=test_sync_engine,
+    class_=Session,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False,
+)
+
 
 @pytest.fixture(autouse=True)
-async def clean_database() -> AsyncGenerator[None, None]:
+async def clean_database(monkeypatch) -> AsyncGenerator[None, None]:
     # Reset in-memory rate limiter
     limiter.reset()
+
+    # Route sync DB calls in workers/reaper to test database
+    monkeypatch.setattr("app.db.session.SyncSessionLocal", TestSyncSessionLocal)
 
     # Clean tables before each test
     async with test_engine.begin() as conn:

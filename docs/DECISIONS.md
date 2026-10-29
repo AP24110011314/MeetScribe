@@ -32,4 +32,14 @@ This file records non-obvious technical decisions, assumptions, and rationales t
 3. **HTTP 206 Partial Content in Dev-Storage**:
    - Waveform renderers (wavesurfer.js) and standard HTML `<audio>` elements rely on RFC 7233 byte-range queries. The dev-storage download endpoint implements byte-range streaming for seamless local audio playback and seeking.
 
+## Phase 3: Async Pipeline Skeleton
+1. **Atomic Meeting Claim Pattern**:
+   - To prevent duplicate simultaneous worker claims, tasks use `UPDATE meetings ... WHERE status IN ('queued', 'failed') RETURNING ...`. If zero rows are returned, the task terminates immediately without duplicate side effects.
+2. **Synchronous DB Session for Celery Workers & Tests**:
+   - Celery worker tasks execute synchronously using `psycopg` to avoid event-loop conflicts.
+   - In test environments, `conftest.py` maps `SyncSessionLocal` to `TEST_DATABASE_URL_SYNC` so tasks and reaper operations interact with the test database cleanly.
+3. **Reaper Beat Task for Stale / Crashed Jobs**:
+   - Scheduled via Celery beat every minute to sweep meetings stuck in `['queued', 'preparing', 'transcribing', 'analyzing']` with no update for `REAPER_STALE_MINUTES`. Re-queues up to `MAX_PROCESS_ATTEMPTS` times before marking `failed`.
+
+
 
