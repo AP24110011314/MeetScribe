@@ -36,9 +36,9 @@
 | F20 | Health (/healthz) and readiness (/readyz) | PASS | test_health.py, test_readyz.py (DB, Redis, storage dependency checks & 503 degrades) | 2026-10-29 |
 | F21 | Per-user data isolation (ownership checks 404) | PASS | test_isolation.py, test_meeting_detail.py, test_action_items.py, test_rename.py | 2026-10-29 |
 | F22 | Rate limiting on auth endpoints (slowapi) | PASS | test_rate_limit.py | 2026-10-29 |
-| U01 | Design system, light/dark theme | PENDING | Phase 7 | |
-| U02 | App shell, navigation, command palette, shortcuts | PENDING | Phase 7 | |
-| U03 | Landing page and polished auth pages | PENDING | Phase 7 | |
+| U01 | Design system, light/dark theme | PASS | theme.test.tsx: theme toggle persists to localStorage, respects prefers-color-scheme, dark class toggle | 2026-10-29 |
+| U02 | App shell, navigation, command palette, shortcuts | PASS | shell.test.tsx: responsive AppShell, Cmd+K CommandPalette, ? shortcuts dialog, mobile slide-over | 2026-10-29 |
+| U03 | Landing page and polished auth pages | PASS | auth.test.tsx: login-form, register-form, inline field validations, password visibility toggle, token refresh | 2026-10-29 |
 | U04 | Dashboard with stats, chart, recent meetings | PENDING | Phase 8 | |
 | U05 | Upload experience: drag & drop, queue, progress | PENDING | Phase 8 | |
 | U06 | Processing step tracker with failed/retry states | PENDING | Phase 8 | |
@@ -53,7 +53,7 @@
 
 ## Summary Stats
 - Total Features: 36 (22 Backend/Product, 14 UI)
-- Passed: 22 (F01 through F22 complete)
-- Pending: 14 (U01 through U14 frontend phases)
+- Passed: 25 (F01–F22, U01–U03 complete)
+- Pending: 11 (U04 through U14)
 - Failed: 0
 

@@ -43,9 +43,9 @@ Work one phase at a time. A phase is done only when every **gate** command was r
 - [x] **Gate:** all remaining backend tests in the TESTING.md matrix pass; `make test-backend` green with coverage at least 80 percent on services and workers
 
 ## Phase 7: Frontend foundation (U01 to U03)
-- [ ] Design system and primitives, themes, app shell, command palette, shortcuts
-- [ ] Landing, login, register, auth context, token refresh, protected routes
-- [ ] **Gate:** `make test-frontend` green; manual check in light and dark at desktop and 390 px width
+- [x] Design system and primitives, themes, app shell, command palette, shortcuts
+- [x] Landing, login, register, auth context, token refresh, protected routes
+- [x] **Gate:** `make test-frontend` green; manual check in light and dark at desktop and 390 px width
 
 ## Phase 8: Frontend features (U04 to U14)
 - [ ] Upload and tracker, meetings list, dashboard, meeting detail with player and transcript, action items (list and board), my action items, settings, polish

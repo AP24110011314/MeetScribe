@@ -77,6 +77,17 @@ This file records non-obvious technical decisions, assumptions, and rationales t
 4. **Readiness Probe (`/readyz`)**:
    - Probes PostgreSQL with `SELECT 1`, Redis with `PING`, and Storage with `head_bucket` or local directory check. Returns 200 `{"db": "ok", "redis": "ok", "storage": "ok"}` when all are healthy, or 503 if any service fails.
 
+## Phase 7: Frontend Foundation
+1. **CSS Variable Design Tokens & HSL Tailwind Integration**:
+   - Light and dark theme palettes are configured as semantic CSS variables (`--background`, `--foreground`, `--primary`, `--muted`, `--border`, etc.) mapped to Tailwind classes.
+   - Theme follows system preference (`prefers-color-scheme`) by default, respects manual override, and persists across sessions via `localStorage` with key `meetscribe_theme`.
+2. **Token Refresh Interceptor & Concurrency Queue**:
+   - `apiFetch` in `src/api/client.ts` intercepts HTTP 401 responses and queues concurrent in-flight requests while refreshing access tokens via `POST /api/v1/auth/refresh`. If token refresh fails, it clears tokens and dispatches an unauthorized event that cleanly resets `AuthContext`.
+3. **Accessible Modal Focus & Global Keyboard Sequences**:
+   - Command Palette (`Cmd+K` / `Ctrl+K`) and Shortcuts Modal (`?`) use Radix Dialog primitives for focus trapping, screen-reader accessibility, and keyboard navigation.
+   - Sequential shortcuts (`g d`, `g m`, `g a`) use a 700ms rolling key buffer that is automatically ignored when the user is focused inside input or textarea elements.
+
+
 
 
 
