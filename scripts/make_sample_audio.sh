@@ -39,3 +39,4 @@ touch "$SAMPLE_DIR/empty.mp3"
 echo "This is not valid audio data" > "$SAMPLE_DIR/corrupt.mp3"
 
 echo "Sample audio generation complete in $SAMPLE_DIR."
+

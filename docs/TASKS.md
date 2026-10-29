@@ -32,9 +32,9 @@ Work one phase at a time. A phase is done only when every **gate** command was r
 - [x] **Gate:** `pytest tests/test_audio.py tests/test_transcription.py` pass; real transcription of the spoken sample (`make_sample_audio.sh`) returns recognizable text
 
 ## Phase 5: LLM analysis (F06 to F09)
-- [ ] `LLMClient` with anthropic and fake providers, prompts from `docs/PROMPTS.md`
-- [ ] Single-pass and map-reduce, dedupe, retry-once validation, persist summary, action items, title
-- [ ] **Gate:** `pytest tests/test_analysis.py` pass; real run on the spoken sample yields a summary and at least one action item
+- [x] `LLMClient` with anthropic and fake providers, prompts from `docs/PROMPTS.md`
+- [x] Single-pass and map-reduce, dedupe, retry-once validation, persist summary, action items, title
+- [x] **Gate:** `pytest tests/test_analysis.py` pass; real run on the spoken sample yields a summary and at least one action item
 
 ## Phase 6: Notes API completion (F10 to F18, F20)
 - [ ] List with search, filter, sort, pagination; detail; transcript and search; audio-url

@@ -12,6 +12,7 @@ from sqlalchemy import func, select, update
 from app.core.config import settings
 from app.db.models import Job, Meeting, Transcript
 from app.db.session import get_sync_db
+from app.services.analysis import AnalysisService
 from app.services.audio import AudioService
 from app.services.storage import get_storage_service
 from app.services.transcription import get_transcriber, merge_chunk_transcripts
@@ -195,7 +196,7 @@ def process_meeting(self: Task, meeting_id_str: str) -> dict[str, Any]:
         )
         session.commit()
 
-        # --- Stage 3: LLM Analysis (Stub in Phase 4; Phase 5 implements real analysis) ---
+        # --- Stage 3: LLM Analysis (Summary, Decisions, Action Items, Title) ---
         logger.info("Meeting %s: Analysis stage started", meeting_id_str)
         session.execute(
             update(Meeting)
@@ -203,7 +204,7 @@ def process_meeting(self: Task, meeting_id_str: str) -> dict[str, Any]:
             .values(
                 status="analyzing",
                 stage="summarization",
-                progress_pct=80.0,
+                progress_pct=75.0,
                 updated_at=func.now(),
             )
         )
@@ -211,6 +212,22 @@ def process_meeting(self: Task, meeting_id_str: str) -> dict[str, Any]:
             update(Job).where(Job.id == job_id).values(stage="summarization", updated_at=func.now())
         )
         session.commit()
+
+        analysis_service = AnalysisService()
+        analysis = analysis_service.analyze_transcript(transcript_row, meeting)
+
+        session.execute(
+            update(Meeting)
+            .where(Meeting.id == meeting.id)
+            .values(
+                progress_pct=90.0,
+                updated_at=func.now(),
+            )
+        )
+        session.commit()
+
+        # Save analysis into summaries and action_items tables
+        analysis_service.save_analysis(session, meeting, analysis)
 
         # --- Stage 4: Finalize & Done ---
         logger.info("Meeting %s: Finalizing pipeline", meeting_id_str)

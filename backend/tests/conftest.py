@@ -38,8 +38,9 @@ async def clean_database(monkeypatch, tmp_path_factory) -> AsyncGenerator[None, 
     # Route sync DB calls in workers/reaper to test database
     monkeypatch.setattr("app.db.session.SyncSessionLocal", TestSyncSessionLocal)
 
-    # Use fake transcriber in test suite to avoid downloading Whisper models
+    # Use fake transcriber and LLM in test suite to avoid downloading Whisper models or calling real APIs
     monkeypatch.setattr(settings, "TRANSCRIBER", "fake")
+    monkeypatch.setattr(settings, "LLM_PROVIDER", "fake")
 
     # Use local storage backend with isolated temp directory for test suite
     temp_storage = tmp_path_factory.mktemp("test_uploads")
@@ -61,6 +62,15 @@ async def clean_database(monkeypatch, tmp_path_factory) -> AsyncGenerator[None, 
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     async with TestingSessionLocal() as session:
         yield session
+
+
+@pytest.fixture
+def sync_db():
+    session = TestSyncSessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
 
 
 @pytest.fixture

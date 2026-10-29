@@ -1,4 +1,14 @@
+from app.services.analysis import AnalysisService
 from app.services.audio import AudioService
+from app.services.llm import (
+    ActionItemAnalysis,
+    AnthropicClient,
+    FakeLLMClient,
+    LLMClient,
+    MeetingAnalysis,
+    SectionAnalysis,
+    get_llm_client,
+)
 from app.services.storage import (
     LocalStorageService,
     S3StorageService,
@@ -30,4 +40,12 @@ __all__ = [
     "merge_chunk_transcripts",
     "Segment",
     "TranscriptResult",
+    "LLMClient",
+    "AnthropicClient",
+    "FakeLLMClient",
+    "MeetingAnalysis",
+    "ActionItemAnalysis",
+    "SectionAnalysis",
+    "get_llm_client",
+    "AnalysisService",
 ]

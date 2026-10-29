@@ -19,10 +19,10 @@
 | F03 | Asynchronous processing with live status | PASS | test_pipeline.py, GET /meetings/{id}/status, live make dev queued->done | 2026-10-29 |
 | F04 | Audio normalization (16 kHz mono) and chunking | PASS | test_audio.py: probe, 16kHz mono normalization, 35-min file yields 4 chunks | 2026-10-29 |
 | F05 | Whisper transcription with timestamps | PASS | test_transcription.py, tsvector trigger, real faster-whisper run on meeting_sample.wav | 2026-10-29 |
-| F06 | Summary, key points, decisions | PENDING | Phase 5 | |
-| F07 | Action items extraction (owner, due date, priority) | PENDING | Phase 5 | |
-| F08 | Suggested meeting title | PENDING | Phase 5 | |
-| F09 | Long-transcript map-reduce & retry validation | PENDING | Phase 5 | |
+| F06 | Summary, key points, decisions | PASS | test_analysis.py, real run on spoken sample yielded summary, key points, decisions | 2026-10-29 |
+| F07 | Action items extraction (owner, due date, priority) | PASS | test_analysis.py (null owner when unstated, date parsing, priority), spoken sample items | 2026-10-29 |
+| F08 | Suggested meeting title | PASS | test_analysis.py: title set only when title_edited=False | 2026-10-29 |
+| F09 | Long-transcript map-reduce & retry validation | PASS | test_analysis.py: map-reduce on 40-min transcript, AnthropicClient retry-once validation | 2026-10-29 |
 | F10 | Meetings list with search, filter, pagination | PENDING | Phase 6 | |
 | F11 | Meeting detail (transcript, summary, action items) | PENDING | Phase 6 | |
 | F12 | Transcript retrieval and segment search | PENDING | Phase 6 | |
@@ -53,7 +53,7 @@
 
 ## Summary Stats
 - Total Features: 36 (22 Backend/Product, 14 UI)
-- Passed: 9 (F01, F02, F03, F04, F05, F19, F20, F21, F22)
-- Pending: 27
+- Passed: 13 (F01, F02, F03, F04, F05, F06, F07, F08, F09, F19, F20, F21, F22)
+- Pending: 23
 - Failed: 0
 

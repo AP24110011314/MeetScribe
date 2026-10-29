@@ -52,6 +52,20 @@ This file records non-obvious technical decisions, assumptions, and rationales t
 4. **Automatic tsvector Search Indexing**:
    - Full-text search vectors are maintained by a PostgreSQL database trigger on `transcripts.full_text`, ensuring search indexing remains atomic with row insertion.
 
+## Phase 5: LLM Analysis
+1. **Single-Pass vs Map-Reduce Strategy**:
+   - Meetings with transcripts $\le 20,000$ tokens are processed in a single prompt.
+   - Longer meetings segment into 10-minute chronological windows for section analysis (map phase), followed by an executive synthesis that consolidates key points and dedupes action items (reduce phase).
+2. **Validation Error Retry Loop**:
+   - LLM responses are validated via Pydantic (`MeetingAnalysis`). On JSON formatting or schema validation errors, the exact error is appended into a retry prompt for one correction turn before failure.
+3. **Strict Owner & Due Date Extraction**:
+   - Action item owners are extracted only when explicitly identified in dialogue; unassigned items are strictly assigned `owner = None` (no hallucination).
+4. **User Title Preservation**:
+   - If `meeting.title_edited == True`, any suggested titles from LLM analysis are ignored to preserve user custom titles.
+5. **Idempotent Analysis Updates**:
+   - Re-running analysis overwrites the `Summary` row and re-creates AI action items (`created_by_ai = True`) without creating duplicate entries or affecting manually created items.
+
+
 
 
 
