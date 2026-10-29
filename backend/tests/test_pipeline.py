@@ -1,11 +1,15 @@
-from unittest.mock import patch
+from pathlib import Path
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from app.db.models import Job, Meeting
+from app.db.models import Job, Meeting, Transcript
+from app.services.storage import get_storage_service
 from app.workers.tasks import process_meeting
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+SAMPLE_AUDIO = PROJECT_ROOT / ".data" / "sample" / "meeting_sample.wav"
 
 
 async def register_and_login(client: AsyncClient, email: str = "pipeline_test@example.com") -> str:
@@ -29,21 +33,23 @@ async def test_process_meeting_success_lifecycle(client: AsyncClient, db_session
     res = await client.post(
         "/api/v1/meetings",
         headers=headers,
-        json={"filename": "standup.mp3", "content_type": "audio/mpeg", "size_bytes": 1024},
+        json={"filename": "standup.wav", "content_type": "audio/wav", "size_bytes": 1024},
     )
     meeting_id = res.json()["meeting_id"]
 
+    # Retrieve meeting row to get its audio_key and upload sample audio
+    res_m = await db_session.execute(select(Meeting).where(Meeting.id == meeting_id))
+    meeting_row = res_m.scalar_one()
+    storage = get_storage_service()
+    storage.upload_from(meeting_row.audio_key, SAMPLE_AUDIO)
+
     # 2. Complete upload
-    with (
-        patch("app.services.storage.S3StorageService.exists", return_value=True),
-        patch("app.services.storage.LocalStorageService.exists", return_value=True),
-    ):
-        complete_res = await client.post(
-            f"/api/v1/meetings/{meeting_id}/complete",
-            headers=headers,
-        )
-        assert complete_res.status_code == 200
-        assert complete_res.json()["status"] == "queued"
+    complete_res = await client.post(
+        f"/api/v1/meetings/{meeting_id}/complete",
+        headers=headers,
+    )
+    assert complete_res.status_code == 200
+    assert complete_res.json()["status"] == "queued"
 
     # 3. Check status endpoint before worker processing
     status_res = await client.get(
@@ -58,6 +64,9 @@ async def test_process_meeting_success_lifecycle(client: AsyncClient, db_session
     result = process_meeting(meeting_id)
     assert result["status"] == "done"
     assert result["meeting_id"] == meeting_id
+
+    # Invalidate session cache so subsequent client queries fetch fresh row
+    db_session.expire_all()
 
     # 5. Check status endpoint after processing
     status_after = await client.get(
@@ -79,6 +88,14 @@ async def test_process_meeting_success_lifecycle(client: AsyncClient, db_session
     assert jobs[0].status == "done"
     assert jobs[0].finished_at is not None
 
+    # 7. Verify Transcript row in db
+    result_tr = await db_session.execute(
+        select(Transcript).where(Transcript.meeting_id == meeting_id)
+    )
+    transcript = result_tr.scalar_one()
+    assert "weekly sync" in transcript.full_text
+    assert len(transcript.segments) > 0
+
 
 @pytest.mark.asyncio
 async def test_process_meeting_idempotency_skip(client: AsyncClient, db_session):
@@ -88,15 +105,16 @@ async def test_process_meeting_idempotency_skip(client: AsyncClient, db_session)
     res = await client.post(
         "/api/v1/meetings",
         headers=headers,
-        json={"filename": "standup.mp3", "content_type": "audio/mpeg", "size_bytes": 1024},
+        json={"filename": "standup.wav", "content_type": "audio/wav", "size_bytes": 1024},
     )
     meeting_id = res.json()["meeting_id"]
 
-    with (
-        patch("app.services.storage.S3StorageService.exists", return_value=True),
-        patch("app.services.storage.LocalStorageService.exists", return_value=True),
-    ):
-        await client.post(f"/api/v1/meetings/{meeting_id}/complete", headers=headers)
+    res_m = await db_session.execute(select(Meeting).where(Meeting.id == meeting_id))
+    meeting_row = res_m.scalar_one()
+    storage = get_storage_service()
+    storage.upload_from(meeting_row.audio_key, SAMPLE_AUDIO)
+
+    await client.post(f"/api/v1/meetings/{meeting_id}/complete", headers=headers)
 
     # First run succeeds
     run1 = process_meeting(meeting_id)
@@ -105,6 +123,8 @@ async def test_process_meeting_idempotency_skip(client: AsyncClient, db_session)
     # Second run should skip cleanly (0 rows updated in claim)
     run2 = process_meeting(meeting_id)
     assert run2["status"] == "skipped"
+
+    db_session.expire_all()
 
     # Ensure attempts remain 1
     result = await db_session.execute(select(Meeting).where(Meeting.id == meeting_id))
@@ -125,31 +145,26 @@ async def test_process_meeting_failure_handling(client: AsyncClient, db_session)
     )
     meeting_id = res.json()["meeting_id"]
 
-    with (
-        patch("app.services.storage.S3StorageService.exists", return_value=True),
-        patch("app.services.storage.LocalStorageService.exists", return_value=True),
-    ):
-        await client.post(f"/api/v1/meetings/{meeting_id}/complete", headers=headers)
+    # Upload corrupt data
+    res_m = await db_session.execute(select(Meeting).where(Meeting.id == meeting_id))
+    meeting_row = res_m.scalar_one()
+    storage = get_storage_service()
+    corrupt_sample = PROJECT_ROOT / ".data" / "sample" / "corrupt.mp3"
+    storage.upload_from(meeting_row.audio_key, corrupt_sample)
 
-    # Simulate an unrecoverable failure during a processing stage
-    with patch(
-        "app.workers.tasks.update",
-        side_effect=[
-            # First call to claim succeeds (handled normally by database, so we mock logger or something later)
-            # Let's mock datetime or let stage 2 raise ValueError
-        ],
-    ):
-        pass
+    await client.post(f"/api/v1/meetings/{meeting_id}/complete", headers=headers)
 
-    with patch("app.workers.tasks.Job", side_effect=ValueError("Corrupted audio data stream")):
-        with pytest.raises(ValueError, match="Corrupted audio data stream"):
-            process_meeting(meeting_id)
+    # Processing corrupt file should fail in audio probe / normalization stage
+    with pytest.raises(Exception):
+        process_meeting(meeting_id)
+
+    db_session.expire_all()
 
     # Check meeting marked failed in database
     result = await db_session.execute(select(Meeting).where(Meeting.id == meeting_id))
     meeting = result.scalar_one()
     assert meeting.status == "failed"
-    assert "Corrupted audio data stream" in meeting.error_message
+    assert meeting.error_message is not None
 
 
 @pytest.mark.asyncio

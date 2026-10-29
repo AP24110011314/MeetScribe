@@ -31,12 +31,20 @@ TestSyncSessionLocal = sessionmaker(
 
 
 @pytest.fixture(autouse=True)
-async def clean_database(monkeypatch) -> AsyncGenerator[None, None]:
+async def clean_database(monkeypatch, tmp_path_factory) -> AsyncGenerator[None, None]:
     # Reset in-memory rate limiter
     limiter.reset()
 
     # Route sync DB calls in workers/reaper to test database
     monkeypatch.setattr("app.db.session.SyncSessionLocal", TestSyncSessionLocal)
+
+    # Use fake transcriber in test suite to avoid downloading Whisper models
+    monkeypatch.setattr(settings, "TRANSCRIBER", "fake")
+
+    # Use local storage backend with isolated temp directory for test suite
+    temp_storage = tmp_path_factory.mktemp("test_uploads")
+    monkeypatch.setattr(settings, "STORAGE_BACKEND", "local")
+    monkeypatch.setattr(settings, "LOCAL_STORAGE_DIR", str(temp_storage))
 
     # Clean tables before each test
     async with test_engine.begin() as conn:

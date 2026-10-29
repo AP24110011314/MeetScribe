@@ -41,5 +41,17 @@ This file records non-obvious technical decisions, assumptions, and rationales t
 3. **Reaper Beat Task for Stale / Crashed Jobs**:
    - Scheduled via Celery beat every minute to sweep meetings stuck in `['queued', 'preparing', 'transcribing', 'analyzing']` with no update for `REAPER_STALE_MINUTES`. Re-queues up to `MAX_PROCESS_ATTEMPTS` times before marking `failed`.
 
+## Phase 4: Audio and Transcription
+1. **Audio Normalization and Chunking Threshold**:
+   - Normalization standardizes all input formats to 16 kHz mono PCM 16-bit WAV (`pcm_s16le`).
+   - Files $\le 30$ minutes (1800s) remain a single piece to prevent boundary cuts; files $> 30$ minutes are segmented into 10-minute (600s) slices via fast stream copying.
+2. **Chunk Timestamp Offset Reconciliation**:
+   - Sub-chunk timestamps are shifted by their respective start offsets (`seg.start += offset_sec`, `seg.end += offset_sec`), and segment indices are renumbered sequentially across chunks.
+3. **Model Caching in Worker**:
+   - `FasterWhisperTranscriber` caches the `WhisperModel` singleton per process on Apple Silicon CPU int8, avoiding repeated disk and model loading overhead.
+4. **Automatic tsvector Search Indexing**:
+   - Full-text search vectors are maintained by a PostgreSQL database trigger on `transcripts.full_text`, ensuring search indexing remains atomic with row insertion.
+
+
 
 

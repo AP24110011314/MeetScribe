@@ -17,8 +17,8 @@
 | F01 | Register, login, refresh token, me (JWT, argon2) | PASS | test_auth.py, manual curl on port 8000 | 2026-10-29 |
 | F02 | Audio upload via presigned URL (S3/local) | PASS | test_upload.py, test_storage_local.py, manual curl PUT to MinIO & local dev-storage | 2026-10-29 |
 | F03 | Asynchronous processing with live status | PASS | test_pipeline.py, GET /meetings/{id}/status, live make dev queued->done | 2026-10-29 |
-| F04 | Audio normalization (16 kHz mono) and chunking | PENDING | Phase 4 | |
-| F05 | Whisper transcription with timestamps | PENDING | Phase 4 | |
+| F04 | Audio normalization (16 kHz mono) and chunking | PASS | test_audio.py: probe, 16kHz mono normalization, 35-min file yields 4 chunks | 2026-10-29 |
+| F05 | Whisper transcription with timestamps | PASS | test_transcription.py, tsvector trigger, real faster-whisper run on meeting_sample.wav | 2026-10-29 |
 | F06 | Summary, key points, decisions | PENDING | Phase 5 | |
 | F07 | Action items extraction (owner, due date, priority) | PENDING | Phase 5 | |
 | F08 | Suggested meeting title | PENDING | Phase 5 | |
@@ -53,7 +53,7 @@
 
 ## Summary Stats
 - Total Features: 36 (22 Backend/Product, 14 UI)
-- Passed: 7 (F01, F02, F03, F19, F20, F21, F22)
-- Pending: 29
+- Passed: 9 (F01, F02, F03, F04, F05, F19, F20, F21, F22)
+- Pending: 27
 - Failed: 0
 

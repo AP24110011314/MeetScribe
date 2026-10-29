@@ -27,9 +27,9 @@ Work one phase at a time. A phase is done only when every **gate** command was r
 - [x] **Gate:** `pytest tests/test_pipeline.py tests/test_reaper.py` pass; with `make dev` an uploaded file moves queued → done via stubs
 
 ## Phase 4: Audio and transcription (F04, F05)
-- [ ] `AudioService` (ffprobe, normalize, chunk), `Transcriber` interface with faster-whisper, openai, and fake
-- [ ] Offsets merged correctly; transcript stored with tsvector
-- [ ] **Gate:** `pytest tests/test_audio.py tests/test_transcription.py` pass; real transcription of the spoken sample (`make_sample_audio.sh`) returns recognizable text
+- [x] `AudioService` (ffprobe, normalize, chunk), `Transcriber` interface with faster-whisper, openai, and fake
+- [x] Offsets merged correctly; transcript stored with tsvector
+- [x] **Gate:** `pytest tests/test_audio.py tests/test_transcription.py` pass; real transcription of the spoken sample (`make_sample_audio.sh`) returns recognizable text
 
 ## Phase 5: LLM analysis (F06 to F09)
 - [ ] `LLMClient` with anthropic and fake providers, prompts from `docs/PROMPTS.md`
