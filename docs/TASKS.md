@@ -58,9 +58,9 @@ Work one phase at a time. A phase is done only when every **gate** command was r
 - [x] **Gate:** `make test` green; `make smoke` all PASS with real Whisper and LLM; `docs/TEST_REPORT.md` has evidence for every F and U id; no BLOCKED rows unless explained
 
 ## Phase 10: Docs and clean-clone check
-- [ ] Re-run every command in `README.md` from a fresh clone in a fresh shell; fix the README where reality differs
-- [ ] `docs/DECISIONS.md` and `docs/UI_BACKLOG.md` up to date
-- [ ] **Gate:** a fresh clone reaches a working app using only the README; final checklist mapping each acceptance criterion to evidence
+- [x] Re-run every command in `README.md` from a fresh clone in a fresh shell; fix the README where reality differs
+- [x] `docs/DECISIONS.md` and `docs/UI_BACKLOG.md` up to date
+- [x] **Gate:** a fresh clone reaches a working app using only the README; final checklist mapping each acceptance criterion to evidence
 
 ## Stretch
 - [ ] Speaker diarization, semantic search (pgvector), Slack or email share
