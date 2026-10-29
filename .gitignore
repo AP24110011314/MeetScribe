@@ -39,6 +39,17 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# Documentation and Instructions
+docs/
+doc/
+AGENTS.md
+Agents.md
+
+# Logs, Process IDs and Shell
+*.log
+*.pid
+nohup.out
+
 # Environment and secrets
 .env
 *.env
@@ -65,4 +76,11 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Build and cache
+*.tsbuildinfo
+.eslintcache
+coverage/
+.coverage*
+
 
