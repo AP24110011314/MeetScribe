@@ -48,8 +48,8 @@ Work one phase at a time. A phase is done only when every **gate** command was r
 - [x] **Gate:** `make test-frontend` green; manual check in light and dark at desktop and 390 px width
 
 ## Phase 8: Frontend features (U04 to U14)
-- [ ] Upload and tracker, meetings list, dashboard, meeting detail with player and transcript, action items (list and board), my action items, settings, polish
-- [ ] **Gate:** `make test-frontend`, `npm run lint`, `npm run typecheck`, `npm run build` all pass; walk the full flow manually
+- [x] Upload and tracker, meetings list, dashboard, meeting detail with player and transcript, action items (list and board), my action items, settings, polish
+- [x] **Gate:** `make test-frontend`, `npm run lint`, `npm run typecheck`, `npm run build` all pass; walk the full flow manually
 
 ## Phase 9: End-to-end verification
 - [ ] Playwright specs from `docs/TESTING.md`

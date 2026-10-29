@@ -29,3 +29,4 @@ export const ProgressBar = forwardRef<
   </ProgressPrimitive.Root>
 ));
 ProgressBar.displayName = ProgressPrimitive.Root.displayName;
+

@@ -54,3 +54,4 @@ export function Avatar({ name, size = 'md', className, ...props }: AvatarProps) 
     </div>
   );
 }
+

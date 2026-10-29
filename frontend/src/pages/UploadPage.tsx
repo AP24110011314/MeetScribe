@@ -1,17 +1,436 @@
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { UploadCloud, FileAudio, CheckCircle2, AlertCircle, RefreshCw, ArrowRight, X } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
+import { ProgressBar } from '@/components/ui/ProgressBar';
+import { Badge } from '@/components/ui/Badge';
+import { useToast } from '@/components/ui/Toast';
+import { getMeetingStatus, retryMeeting, uploadAudioFile } from '@/api/meetings';
+import { MeetingStatusData } from '@/types/meeting';
+
+interface QueueItem {
+  id: string;
+  file: File;
+  progress: number;
+  status: 'uploading' | 'processing' | 'done' | 'failed' | 'cancelled';
+  meetingId?: string;
+  error?: string;
+  statusData?: MeetingStatusData;
+}
+
+const ALLOWED_EXTENSIONS = ['mp3', 'wav', 'm4a', 'mp4', 'webm', 'ogg'];
+const MAX_UPLOAD_MB = 500;
 
 export function UploadPage() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [activeItem, setActiveItem] = useState<QueueItem | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Poll status for active processing item every 2.5s
+  useEffect(() => {
+    if (!activeItem?.meetingId || activeItem.status !== 'processing') return;
+
+    const interval = setInterval(async () => {
+      try {
+        const data = await getMeetingStatus(activeItem.meetingId!);
+        setActiveItem((prev) => (prev ? { ...prev, statusData: data } : null));
+
+        if (data.status === 'done') {
+          setActiveItem((prev) => (prev ? { ...prev, status: 'done', statusData: data } : null));
+          toast({
+            type: 'success',
+            title: 'Meeting Ready!',
+            description: 'Transcription and analysis complete.',
+          });
+        } else if (data.status === 'failed') {
+          setActiveItem((prev) => (prev ? { ...prev, status: 'failed', error: data.error_message || 'Processing failed' } : null));
+          toast({
+            type: 'error',
+            title: 'Processing failed',
+            description: data.error_message || 'Pipeline encountered an error',
+          });
+        }
+      } catch {
+        // error polling
+      }
+    }, 2500);
+
+    return () => clearInterval(interval);
+  }, [activeItem?.meetingId, activeItem?.status, toast]);
+
+  const validateFile = (file: File): string | null => {
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!ext || !ALLOWED_EXTENSIONS.includes(ext)) {
+      return `Unsupported format .${ext}. Allowed formats: ${ALLOWED_EXTENSIONS.join(', ')}`;
+    }
+    const maxBytes = MAX_UPLOAD_MB * 1024 * 1024;
+    if (file.size > maxBytes) {
+      return `File exceeds ${MAX_UPLOAD_MB} MB limit (${(file.size / (1024 * 1024)).toFixed(1)} MB)`;
+    }
+    return null;
+  };
+
+  const handleFiles = (files: FileList | File[]) => {
+    const newItems: QueueItem[] = [];
+
+    Array.from(files).forEach((file) => {
+      const err = validateFile(file);
+      if (err) {
+        toast({ type: 'error', title: 'Invalid File', description: err });
+        return;
+      }
+
+      newItems.push({
+        id: Math.random().toString(36).substring(2, 9),
+        file,
+        progress: 0,
+        status: 'uploading',
+      });
+    });
+
+    if (newItems.length > 0) {
+      setQueue((prev) => [...prev, ...newItems]);
+      if (!activeItem) {
+        startUpload(newItems[0]);
+      }
+    }
+  };
+
+  const startUpload = async (item: QueueItem) => {
+    setActiveItem(item);
+
+    try {
+      const meetingId = await uploadAudioFile(item.file, (pct) => {
+        setActiveItem((prev) => (prev?.id === item.id ? { ...prev, progress: pct } : prev));
+      });
+
+      setActiveItem((prev) =>
+        prev?.id === item.id
+          ? {
+              ...prev,
+              meetingId,
+              status: 'processing',
+              progress: 100,
+            }
+          : prev
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Upload failed';
+      setActiveItem((prev) =>
+        prev?.id === item.id ? { ...prev, status: 'failed', error: msg } : prev
+      );
+      toast({ type: 'error', title: 'Upload failed', description: msg });
+    }
+  };
+
+  const handleRetry = async () => {
+    if (!activeItem?.meetingId) return;
+    try {
+      const data = await retryMeeting(activeItem.meetingId);
+      setActiveItem((prev) =>
+        prev ? { ...prev, status: 'processing', error: undefined, statusData: data } : null
+      );
+      toast({ type: 'info', title: 'Retrying', description: 'Re-queued for processing' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Retry failed';
+      toast({ type: 'error', title: 'Retry Error', description: msg });
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files);
+    }
+  };
+
+  const getStepStatus = (stepName: 'uploaded' | 'preparing' | 'transcribing' | 'analyzing' | 'done') => {
+    const stage = activeItem?.statusData?.stage || '';
+    const status = activeItem?.statusData?.status || activeItem?.status || '';
+
+    if (status === 'done') return 'completed';
+    if (status === 'failed') return 'failed';
+
+    const order = ['uploaded', 'preparing', 'transcribing', 'analyzing', 'done'];
+    const currentStep =
+      stage === 'analyze' || stage === 'reduce'
+        ? 'analyzing'
+        : stage === 'transcribe'
+        ? 'transcribing'
+        : stage === 'normalize' || stage === 'chunk'
+        ? 'preparing'
+        : status === 'queued'
+        ? 'uploaded'
+        : 'uploaded';
+
+    const currentIndex = order.indexOf(currentStep);
+    const stepIndex = order.indexOf(stepName);
+
+    if (stepIndex < currentIndex) return 'completed';
+    if (stepIndex === currentIndex) return 'active';
+    return 'pending';
+  };
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight">Upload Recording</h1>
-      <Card>
-        <CardHeader>
-          <CardTitle>Meeting Audio</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">Upload dropzone and step tracker will appear in Phase 8.</p>
-        </CardContent>
-      </Card>
+    <div className="space-y-8 max-w-4xl mx-auto">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Upload Recording</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Drop meeting audio to transcribe and extract summaries, decisions, and action items.
+        </p>
+      </div>
+
+      {/* Upload Dropzone */}
+      <div
+        data-testid="upload-dropzone"
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={handleDrop}
+        onClick={() => fileInputRef.current?.click()}
+        className={`relative flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-2xl cursor-pointer transition-all ${
+          isDragging
+            ? 'border-primary bg-primary/10'
+            : 'border-border hover:border-primary/50 hover:bg-muted/40 bg-card'
+        }`}
+      >
+        <input
+          ref={fileInputRef}
+          data-testid="upload-file-input"
+          type="file"
+          accept=".mp3,.wav,.m4a,.mp4,.webm,.ogg"
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files) handleFiles(e.target.files);
+          }}
+        />
+
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-4 shadow-sm">
+          <UploadCloud className="h-8 w-8" />
+        </div>
+
+        <h3 className="text-lg font-semibold text-foreground">Click to upload or drag & drop</h3>
+        <p className="text-sm text-muted-foreground mt-1">
+          MP3, WAV, M4A, MP4, WebM, or OGG up to {MAX_UPLOAD_MB} MB
+        </p>
+      </div>
+
+      {/* Active Processing Step Tracker */}
+      {activeItem && (
+        <Card className="border-border shadow-md">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <FileAudio className="h-5 w-5 text-primary" />
+                  <span>{activeItem.file.name}</span>
+                </CardTitle>
+                <CardDescription>
+                  {(activeItem.file.size / (1024 * 1024)).toFixed(2)} MB
+                </CardDescription>
+              </div>
+
+              {activeItem.status === 'done' && (
+                <Badge variant="success" className="gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>Completed</span>
+                </Badge>
+              )}
+              {activeItem.status === 'failed' && (
+                <Badge variant="destructive" className="gap-1">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  <span>Failed</span>
+                </Badge>
+              )}
+              {activeItem.status === 'processing' && (
+                <Badge variant="secondary" className="gap-1 animate-pulse">
+                  <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  <span>Processing</span>
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-6">
+            {/* Progress bar */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-medium text-muted-foreground">
+                <span>Progress</span>
+                <span>
+                  {activeItem.status === 'uploading'
+                    ? `${activeItem.progress}% (Uploading)`
+                    : `${Math.round(activeItem.statusData?.progress_pct || 0)}%`}
+                </span>
+              </div>
+              <ProgressBar
+                value={
+                  activeItem.status === 'uploading'
+                    ? activeItem.progress
+                    : activeItem.statusData?.progress_pct || 0
+                }
+              />
+            </div>
+
+            {/* Step Tracker (U06) */}
+            <div data-testid="step-tracker" className="pt-2">
+              <div className="grid grid-cols-5 gap-2 text-center text-xs">
+                {/* Uploaded */}
+                <div
+                  data-testid="step-uploaded"
+                  className={`p-2.5 rounded-lg border font-medium ${
+                    getStepStatus('uploaded') === 'completed'
+                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                      : 'border-border text-muted-foreground'
+                  }`}
+                >
+                  Uploaded
+                </div>
+
+                {/* Preparing */}
+                <div
+                  data-testid="step-preparing"
+                  className={`p-2.5 rounded-lg border font-medium ${
+                    getStepStatus('preparing') === 'completed'
+                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                      : getStepStatus('preparing') === 'active'
+                      ? 'border-primary bg-primary/10 text-primary animate-pulse'
+                      : 'border-border text-muted-foreground'
+                  }`}
+                >
+                  Preparing
+                </div>
+
+                {/* Transcribing */}
+                <div
+                  data-testid="step-transcribing"
+                  className={`p-2.5 rounded-lg border font-medium ${
+                    getStepStatus('transcribing') === 'completed'
+                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                      : getStepStatus('transcribing') === 'active'
+                      ? 'border-primary bg-primary/10 text-primary animate-pulse'
+                      : 'border-border text-muted-foreground'
+                  }`}
+                >
+                  Transcribing
+                </div>
+
+                {/* Analyzing */}
+                <div
+                  data-testid="step-analyzing"
+                  className={`p-2.5 rounded-lg border font-medium ${
+                    getStepStatus('analyzing') === 'completed'
+                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                      : getStepStatus('analyzing') === 'active'
+                      ? 'border-primary bg-primary/10 text-primary animate-pulse'
+                      : 'border-border text-muted-foreground'
+                  }`}
+                >
+                  Analyzing
+                </div>
+
+                {/* Done */}
+                <div
+                  data-testid="step-done"
+                  className={`p-2.5 rounded-lg border font-medium ${
+                    getStepStatus('done') === 'completed'
+                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                      : 'border-border text-muted-foreground'
+                  }`}
+                >
+                  Done
+                </div>
+              </div>
+            </div>
+
+            {/* Error & Retry state */}
+            {activeItem.status === 'failed' && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 shrink-0" />
+                  <p className="text-sm font-medium">{activeItem.error || 'Pipeline error'}</p>
+                </div>
+                <Button
+                  data-testid="retry-button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleRetry}
+                  className="gap-2 shrink-0"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span>Retry Processing</span>
+                </Button>
+              </div>
+            )}
+
+            {/* Success Action */}
+            {activeItem.status === 'done' && (
+              <div className="flex justify-end pt-2">
+                <Button
+                  onClick={() => navigate(`/meetings/${activeItem.meetingId}`)}
+                  className="gap-2"
+                >
+                  <span>View Meeting Notes</span>
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Upload Queue */}
+      {queue.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-base font-semibold">Upload Queue ({queue.length})</h2>
+          <div className="space-y-2">
+            {queue.map((item) => (
+              <div
+                key={item.id}
+                data-testid="upload-queue-item"
+                className="flex items-center justify-between p-3.5 rounded-xl border bg-card text-card-foreground shadow-sm"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <FileAudio className="h-5 w-5 text-muted-foreground shrink-0" />
+                  <div className="truncate">
+                    <p className="text-sm font-medium truncate">{item.file.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(item.file.size / (1024 * 1024)).toFixed(2)} MB
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Badge
+                    variant={
+                      item.status === 'done'
+                        ? 'success'
+                        : item.status === 'failed'
+                        ? 'destructive'
+                        : 'secondary'
+                    }
+                  >
+                    {item.status}
+                  </Badge>
+                  <button
+                    onClick={() => setQueue((prev) => prev.filter((q) => q.id !== item.id))}
+                    className="p-1 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

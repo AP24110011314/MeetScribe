@@ -48,3 +48,4 @@ export const TabsContent = forwardRef<
   />
 ));
 TabsContent.displayName = TabsPrimitive.Content.displayName;
+

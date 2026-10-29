@@ -24,3 +24,4 @@ export async function getCurrentUser(): Promise<User> {
 export function logoutUser(): void {
   clearTokens();
 }
+

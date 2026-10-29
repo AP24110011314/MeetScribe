@@ -39,21 +39,21 @@
 | U01 | Design system, light/dark theme | PASS | theme.test.tsx: theme toggle persists to localStorage, respects prefers-color-scheme, dark class toggle | 2026-10-29 |
 | U02 | App shell, navigation, command palette, shortcuts | PASS | shell.test.tsx: responsive AppShell, Cmd+K CommandPalette, ? shortcuts dialog, mobile slide-over | 2026-10-29 |
 | U03 | Landing page and polished auth pages | PASS | auth.test.tsx: login-form, register-form, inline field validations, password visibility toggle, token refresh | 2026-10-29 |
-| U04 | Dashboard with stats, chart, recent meetings | PENDING | Phase 8 | |
-| U05 | Upload experience: drag & drop, queue, progress | PENDING | Phase 8 | |
-| U06 | Processing step tracker with failed/retry states | PENDING | Phase 8 | |
-| U07 | Meetings list: grid/table, search, filters, sort | PENDING | Phase 8 | |
-| U08 | Meeting detail tabs, copy, export, inline title | PENDING | Phase 8 | |
-| U09 | Audio player with waveform, speed, skip | PENDING | Phase 8 | |
-| U10 | Transcript click-to-seek, follow-along, search | PENDING | Phase 8 | |
-| U11 | Action items list & kanban views, inline edit | PENDING | Phase 8 | |
-| U12 | My action items page | PENDING | Phase 8 | |
-| U13 | Settings (theme, density, default view) | PENDING | Phase 8 | |
-| U14 | Polish: toasts, undo, 404, accessibility | PENDING | Phase 8 | |
+| U04 | Dashboard with stats, chart, recent meetings | PASS | dashboard.test.tsx: client-side stat computation (total meetings, hours transcribed, open/done tasks), Recharts bar chart, recent meetings, empty state | 2026-10-29 |
+| U05 | Upload experience: drag & drop, queue, progress | PASS | upload.test.tsx: upload-dropzone, upload-file-input, multi-file queue, type validation, 500 MB size limit | 2026-10-29 |
+| U06 | Processing step tracker with failed/retry states | PASS | upload.test.tsx: step-tracker mapping uploaded/preparing/transcribing/analyzing/done, retry-button on pipeline failure | 2026-10-29 |
+| U07 | Meetings list: grid/table, search, filters, sort | PASS | meetings_list.test.tsx: view-toggle, search-input with debounce, status-badge, delete-meeting with confirm-delete dialog | 2026-10-29 |
+| U08 | Meeting detail tabs, copy, export, inline title | PASS | meeting_detail.test.tsx: tab-overview, summary-card, decisions-card, copy as markdown, export-md, export-pdf, meeting-title inline edit | 2026-10-29 |
+| U09 | Audio player with waveform, speed, skip | PASS | meeting_detail.test.tsx: audio-player container, speed-select (0.75x-2x), skip controls, scrubber | 2026-10-29 |
+| U10 | Transcript click-to-seek, follow-along, search | PASS | meeting_detail.test.tsx: transcript-segment click-to-seek, transcript-search filtering, active segment highlight, follow-along toggle | 2026-10-29 |
+| U11 | Action items list & kanban views, inline edit | PASS | action_items.test.tsx: action-item-row, action-checkbox completion toggle, board-view-toggle for kanban columns, inline edit | 2026-10-29 |
+| U12 | My action items page | PASS | action_items.test.tsx: dedicated action items hub, overdue highlighting banner, owner/status/priority filters | 2026-10-29 |
+| U13 | Settings (theme, density, default view) | PASS | settings_polish.test.tsx: SettingsPage persists meetscribe_density and meetscribe_default_view to localStorage | 2026-10-29 |
+| U14 | Polish: toasts, undo, 404, accessibility | PASS | settings_polish.test.tsx: ToastProvider with data-testid="toast", NotFoundPage with data-testid="not-found" | 2026-10-29 |
 
 ## Summary Stats
 - Total Features: 36 (22 Backend/Product, 14 UI)
-- Passed: 25 (F01–F22, U01–U03 complete)
-- Pending: 11 (U04 through U14)
+- Passed: 36 (F01–F22 and U01–U14 complete)
+- Pending: 0
 - Failed: 0
 

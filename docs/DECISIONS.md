@@ -87,6 +87,19 @@ This file records non-obvious technical decisions, assumptions, and rationales t
    - Command Palette (`Cmd+K` / `Ctrl+K`) and Shortcuts Modal (`?`) use Radix Dialog primitives for focus trapping, screen-reader accessibility, and keyboard navigation.
    - Sequential shortcuts (`g d`, `g m`, `g a`) use a 700ms rolling key buffer that is automatically ignored when the user is focused inside input or textarea elements.
 
+## Phase 8: Frontend Features
+1. **Client-Side Aggregated Metrics**:
+   - Dashboard stat cards calculate total meeting counts, total hours transcribed, open action items, and completed items directly from the meetings and action items list API responses without requiring dedicated backend stats endpoints.
+2. **Polling-Driven Step Tracker**:
+   - Upload step tracker polls `GET /api/v1/meetings/{id}/status` every 2.5 seconds while status is `processing`, mapping `stage` and `progress_pct` to sequential UI steps (`uploaded`, `preparing`, `transcribing`, `analyzing`, `done`).
+3. **Dual View Layout with LocalStorage Persistence**:
+   - Meetings page supports both Card Grid and Table Row layouts, with user preference persisted in `localStorage` under `meetscribe_default_view`.
+4. **Synchronized Click-to-Seek & Auto-Scroll**:
+   - Meeting detail player synchronizes current playback time with transcript segments. Clicking any segment seeks the player, while an auto-scroll observer keeps the active dialogue in view when "Follow Along" is enabled.
+5. **Hybrid List and Kanban Board for Action Items**:
+   - Action items page supports toggling between a chronological list view and a two-column Kanban board (To Do / Completed) with one-click status transitions and overdue alerts.
+
+
 
 
 
