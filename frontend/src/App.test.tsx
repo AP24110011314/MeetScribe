@@ -8,3 +8,4 @@ describe('App Component', () => {
     expect(screen.getByText('MeetScribe')).toBeInTheDocument();
   });
 });
+

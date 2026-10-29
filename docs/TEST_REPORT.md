@@ -14,7 +14,7 @@
 
 | ID | Feature Description | Result | Evidence / Test | Date |
 |---|---|---|---|---|
-| F01 | Register, login, refresh token, me (JWT, argon2) | PENDING | Phase 1 | |
+| F01 | Register, login, refresh token, me (JWT, argon2) | PASS | test_auth.py, manual curl on port 8000 | 2026-10-29 |
 | F02 | Audio upload via presigned URL (S3/local) | PENDING | Phase 2 | |
 | F03 | Asynchronous processing with live status | PENDING | Phase 3 | |
 | F04 | Audio normalization (16 kHz mono) and chunking | PENDING | Phase 4 | |
@@ -34,8 +34,8 @@
 | F18 | Export notes to Markdown and PDF | PENDING | Phase 6 | |
 | F19 | Crash recovery: stuck jobs re-queued by reaper | PENDING | Phase 3 / Phase 9 | |
 | F20 | Health (/healthz) and readiness (/readyz) | PASS | test_healthz_endpoint, /healthz curl | 2026-10-29 |
-| F21 | Per-user data isolation (ownership checks 404) | PENDING | Phase 1 | |
-| F22 | Rate limiting on auth endpoints (slowapi) | PENDING | Phase 1 | |
+| F21 | Per-user data isolation (ownership checks 404) | PASS | test_isolation.py | 2026-10-29 |
+| F22 | Rate limiting on auth endpoints (slowapi) | PASS | test_rate_limit.py | 2026-10-29 |
 | U01 | Design system, light/dark theme | PENDING | Phase 7 | |
 | U02 | App shell, navigation, command palette, shortcuts | PENDING | Phase 7 | |
 | U03 | Landing page and polished auth pages | PENDING | Phase 7 | |
@@ -53,7 +53,7 @@
 
 ## Summary Stats
 - Total Features: 36 (22 Backend/Product, 14 UI)
-- Passed: 1 (F20 healthz verified)
-- Pending: 35
+- Passed: 4 (F01, F20, F21, F22)
+- Pending: 32
 - Failed: 0
 

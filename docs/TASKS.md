@@ -10,10 +10,10 @@ Work one phase at a time. A phase is done only when every **gate** command was r
 - [x] **Gate:** `./scripts/setup_mac.sh` completes; `make check` all PASS; `make dev` starts; `curl localhost:8000/healthz` returns ok; `grep -rnw "5000" backend frontend scripts Makefile Procfile.dev Procfile.local .env.example` prints nothing; `http://localhost:5173` loads
 
 ## Phase 1: Data model and auth (F01, F21, F22)
-- [ ] Models and migration exactly per `docs/DATABASE.md`
-- [ ] Register, login, refresh, me; argon2; JWT; rate limit on auth
-- [ ] `get_current_user` and `get_owned_meeting` dependencies
-- [ ] **Gate:** `pytest tests/test_auth.py tests/test_isolation.py tests/test_rate_limit.py` pass; manual curl register and login on port 8000
+- [x] Models and migration exactly per `docs/DATABASE.md`
+- [x] Register, login, refresh, me; argon2; JWT; rate limit on auth
+- [x] `get_current_user` and `get_owned_meeting` dependencies
+- [x] **Gate:** `pytest tests/test_auth.py tests/test_isolation.py tests/test_rate_limit.py` pass; manual curl register and login on port 8000
 
 ## Phase 2: Storage and upload (F02)
 - [ ] `StorageService` with `s3` (boto3, presign, head, delete) and `local` backends, dev-storage routes
