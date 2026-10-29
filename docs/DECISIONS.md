@@ -65,6 +65,18 @@ This file records non-obvious technical decisions, assumptions, and rationales t
 5. **Idempotent Analysis Updates**:
    - Re-running analysis overwrites the `Summary` row and re-creates AI action items (`created_by_ai = True`) without creating duplicate entries or affecting manually created items.
 
+## Phase 6: Notes API Completion
+1. **Pure Python PDF Generation with ReportLab**:
+   - System libraries like `weasyprint` or `wkhtmltopdf` introduce complex C-dependencies (pango, cairo) that fail or require specific dylib linking on macOS Apple Silicon.
+   - `export_pdf` uses pure Python `reportlab` (`SimpleDocTemplate`, `Table`, `Paragraph`) to build professional letter-size PDF summaries with zero system C dependencies.
+2. **Cross-Title & Transcript Full-Text Search**:
+   - Meeting listing `GET /meetings?q=...` performs an outer join with `Transcript` and evaluates `or_(Meeting.title.ilike(...), Transcript.full_text.ilike(...), Transcript.search_vector.op("@@")(websearch_to_tsquery('english', q)))`.
+   - Count queries explicitly count distinct `Meeting.id` over the joined conditions without subquery cartesian products.
+3. **Cascading Deletion & Storage Cleanup**:
+   - `DELETE /meetings/{id}` removes database records (cascading automatically to transcripts, summaries, action items, and job logs) and synchronously purges the original audio file from S3 / local storage.
+4. **Readiness Probe (`/readyz`)**:
+   - Probes PostgreSQL with `SELECT 1`, Redis with `PING`, and Storage with `head_bucket` or local directory check. Returns 200 `{"db": "ok", "redis": "ok", "storage": "ok"}` when all are healthy, or 503 if any service fails.
+
 
 
 

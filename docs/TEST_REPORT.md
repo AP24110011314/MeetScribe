@@ -23,18 +23,18 @@
 | F07 | Action items extraction (owner, due date, priority) | PASS | test_analysis.py (null owner when unstated, date parsing, priority), spoken sample items | 2026-10-29 |
 | F08 | Suggested meeting title | PASS | test_analysis.py: title set only when title_edited=False | 2026-10-29 |
 | F09 | Long-transcript map-reduce & retry validation | PASS | test_analysis.py: map-reduce on 40-min transcript, AnthropicClient retry-once validation | 2026-10-29 |
-| F10 | Meetings list with search, filter, pagination | PENDING | Phase 6 | |
-| F11 | Meeting detail (transcript, summary, action items) | PENDING | Phase 6 | |
-| F12 | Transcript retrieval and segment search | PENDING | Phase 6 | |
-| F13 | Audio playback via presigned GET (Range support) | PENDING | Phase 6 | |
-| F14 | Action item CRUD & cross-meeting list | PENDING | Phase 6 | |
-| F15 | Rename meeting (title_edited flag) | PENDING | Phase 6 | |
-| F16 | Delete meeting with storage cleanup | PENDING | Phase 6 | |
-| F17 | Retry failed meeting | PENDING | Phase 6 | |
-| F18 | Export notes to Markdown and PDF | PENDING | Phase 6 | |
+| F10 | Meetings list with search, filter, pagination | PASS | test_meetings_list.py: pagination, title/transcript search, status filter, sort | 2026-10-29 |
+| F11 | Meeting detail (transcript, summary, action items) | PASS | test_meeting_detail.py: complete detail with nested summary and items, partial pending | 2026-10-29 |
+| F12 | Transcript retrieval and segment search | PASS | test_transcript.py: segments list, ?q= query matching segment indices | 2026-10-29 |
+| F13 | Audio playback via presigned GET (Range support) | PASS | test_audio_url.py: presigned download URL generation, dev-storage RFC 7233 range | 2026-10-29 |
+| F14 | Action item CRUD & cross-meeting list | PASS | test_action_items.py: cross-meeting listing with filters, patch status/priority, delete | 2026-10-29 |
+| F15 | Rename meeting (title_edited flag) | PASS | test_rename.py: title update sets title_edited=True, whitespace validation 422 | 2026-10-29 |
+| F16 | Delete meeting with storage cleanup | PASS | test_delete.py: 204 response, DB cascade, audio key purged from storage | 2026-10-29 |
+| F17 | Retry failed meeting | PASS | test_retry.py: failed -> queued (5%), re-enqueued to Celery; 409 for non-failed | 2026-10-29 |
+| F18 | Export notes to Markdown and PDF | PASS | test_export.py: Markdown attachment, ReportLab PDF starts with %PDF | 2026-10-29 |
 | F19 | Crash recovery: stuck jobs re-queued by reaper | PASS | test_reaper.py, reaper re-queuing and max attempts failure verification | 2026-10-29 |
-| F20 | Health (/healthz) and readiness (/readyz) | PASS | test_healthz_endpoint, /healthz curl | 2026-10-29 |
-| F21 | Per-user data isolation (ownership checks 404) | PASS | test_isolation.py | 2026-10-29 |
+| F20 | Health (/healthz) and readiness (/readyz) | PASS | test_health.py, test_readyz.py (DB, Redis, storage dependency checks & 503 degrades) | 2026-10-29 |
+| F21 | Per-user data isolation (ownership checks 404) | PASS | test_isolation.py, test_meeting_detail.py, test_action_items.py, test_rename.py | 2026-10-29 |
 | F22 | Rate limiting on auth endpoints (slowapi) | PASS | test_rate_limit.py | 2026-10-29 |
 | U01 | Design system, light/dark theme | PENDING | Phase 7 | |
 | U02 | App shell, navigation, command palette, shortcuts | PENDING | Phase 7 | |
@@ -53,7 +53,7 @@
 
 ## Summary Stats
 - Total Features: 36 (22 Backend/Product, 14 UI)
-- Passed: 13 (F01, F02, F03, F04, F05, F06, F07, F08, F09, F19, F20, F21, F22)
-- Pending: 23
+- Passed: 22 (F01 through F22 complete)
+- Pending: 14 (U01 through U14 frontend phases)
 - Failed: 0
 

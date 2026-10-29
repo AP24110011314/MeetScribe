@@ -7,9 +7,21 @@ from app.schemas.auth import (
     UserResponse,
 )
 from app.schemas.meeting import (
+    ActionItemCreateRequest,
+    ActionItemListResponse,
+    ActionItemResponse,
+    ActionItemUpdateRequest,
+    AudioUrlResponse,
     MeetingCreateRequest,
+    MeetingDetailResponse,
+    MeetingListItem,
+    MeetingListResponse,
     MeetingStatusResponse,
+    MeetingUpdateRequest,
     MeetingUploadResponse,
+    SummaryResponse,
+    TranscriptResponse,
+    TranscriptSegment,
 )
 
 __all__ = [
@@ -22,4 +34,16 @@ __all__ = [
     "MeetingCreateRequest",
     "MeetingUploadResponse",
     "MeetingStatusResponse",
+    "MeetingUpdateRequest",
+    "MeetingListItem",
+    "MeetingListResponse",
+    "MeetingDetailResponse",
+    "SummaryResponse",
+    "ActionItemResponse",
+    "ActionItemListResponse",
+    "ActionItemCreateRequest",
+    "ActionItemUpdateRequest",
+    "TranscriptSegment",
+    "TranscriptResponse",
+    "AudioUrlResponse",
 ]

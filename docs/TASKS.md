@@ -37,10 +37,10 @@ Work one phase at a time. A phase is done only when every **gate** command was r
 - [x] **Gate:** `pytest tests/test_analysis.py` pass; real run on the spoken sample yields a summary and at least one action item
 
 ## Phase 6: Notes API completion (F10 to F18, F20)
-- [ ] List with search, filter, sort, pagination; detail; transcript and search; audio-url
-- [ ] Action item CRUD and cross-meeting list; rename; delete with storage cleanup; retry
-- [ ] Markdown and PDF export (reportlab); `/readyz`
-- [ ] **Gate:** all remaining backend tests in the TESTING.md matrix pass; `make test-backend` green with coverage at least 80 percent on services and workers
+- [x] List with search, filter, sort, pagination; detail; transcript and search; audio-url
+- [x] Action item CRUD and cross-meeting list; rename; delete with storage cleanup; retry
+- [x] Markdown and PDF export (reportlab); `/readyz`
+- [x] **Gate:** all remaining backend tests in the TESTING.md matrix pass; `make test-backend` green with coverage at least 80 percent on services and workers
 
 ## Phase 7: Frontend foundation (U01 to U03)
 - [ ] Design system and primitives, themes, app shell, command palette, shortcuts

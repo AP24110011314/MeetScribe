@@ -42,10 +42,60 @@ app.add_middleware(
 )
 
 
-# System health endpoint
+# System health & readiness endpoints
 @app.get("/healthz", tags=["System"])
 async def healthz() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/readyz", tags=["System"])
+async def readyz() -> JSONResponse:
+    checks = {"db": "fail", "redis": "fail", "storage": "fail"}
+
+    # 1. Database check
+    try:
+        from sqlalchemy import text
+
+        from app.db.session import async_engine
+
+        async with async_engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        checks["db"] = "ok"
+    except Exception:
+        pass
+
+    # 2. Redis check
+    try:
+        import redis.asyncio as aioredis
+
+        r = aioredis.from_url(settings.REDIS_URL)  # type: ignore[no-untyped-call]
+        await r.ping()
+        await r.aclose()
+        checks["redis"] = "ok"
+    except Exception:
+        pass
+
+    # 3. Storage check
+    try:
+        from app.services.storage import LocalStorageService, S3StorageService, get_storage_service
+
+        storage = get_storage_service()
+        if isinstance(storage, S3StorageService):
+            # Test connectivity to S3 / MinIO
+            storage.client.head_bucket(Bucket=settings.S3_BUCKET)
+        elif isinstance(storage, LocalStorageService):
+            if not storage.base_dir.exists():
+                raise FileNotFoundError("Local storage directory missing")
+        checks["storage"] = "ok"
+    except Exception:
+        pass
+
+    is_ready = all(v == "ok" for v in checks.values())
+    status_code = 200 if is_ready else 503
+    return JSONResponse(
+        status_code=status_code,
+        content=checks,
+    )
 
 
 # API Router

@@ -73,6 +73,14 @@ def sync_db():
         session.close()
 
 
+async def create_user_and_token(
+    client: AsyncClient, email: str = "test@example.com", password: str = "password123"
+) -> str:
+    await client.post("/api/v1/auth/register", json={"email": email, "password": password})
+    res = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
+    return res.json()["access_token"]
+
+
 @pytest.fixture
 async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
