@@ -11,9 +11,9 @@ export function LandingPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
+    <div className="min-h-screen bg-background text-foreground flex flex-col overflow-x-hidden w-full">
       {/* Navigation */}
-      <header className="border-b border-border bg-card/50 backdrop-blur-md sticky top-0 z-30 px-6 h-16 flex items-center justify-between">
+      <header className="border-b border-border bg-card/50 backdrop-blur-md sticky top-0 z-30 px-4 sm:px-6 h-16 flex items-center justify-between w-full max-w-full">
         <div className="flex items-center gap-2 font-bold text-lg text-primary tracking-tight">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-extrabold text-sm shadow">
             MS

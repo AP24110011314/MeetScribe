@@ -52,10 +52,10 @@ Work one phase at a time. A phase is done only when every **gate** command was r
 - [x] **Gate:** `make test-frontend`, `npm run lint`, `npm run typecheck`, `npm run build` all pass; walk the full flow manually
 
 ## Phase 9: End-to-end verification
-- [ ] Playwright specs from `docs/TESTING.md`
-- [ ] `scripts/smoke_test.py` and `make_sample_audio.sh`
-- [ ] Crash recovery test executed and recorded
-- [ ] **Gate:** `make test` green; `make smoke` all PASS with real Whisper and LLM; `docs/TEST_REPORT.md` has evidence for every F and U id; no BLOCKED rows unless explained
+- [x] Playwright specs from `docs/TESTING.md`
+- [x] `scripts/smoke_test.py` and `make_sample_audio.sh`
+- [x] Crash recovery test executed and recorded
+- [x] **Gate:** `make test` green; `make smoke` all PASS with real Whisper and LLM; `docs/TEST_REPORT.md` has evidence for every F and U id; no BLOCKED rows unless explained
 
 ## Phase 10: Docs and clean-clone check
 - [ ] Re-run every command in `README.md` from a fresh clone in a fresh shell; fix the README where reality differs

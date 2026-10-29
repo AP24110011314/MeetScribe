@@ -69,6 +69,15 @@ def process_meeting(self: Task, meeting_id_str: str) -> dict[str, Any]:
             return {"status": "skipped", "meeting_id": meeting_id_str}
 
         # 2. Record Job execution
+        prior_failed_jobs = (
+            session.execute(
+                select(func.count(Job.id)).where(
+                    Job.meeting_id == meeting.id, Job.status == "failed"
+                )
+            ).scalar()
+            or 0
+        )
+
         job = Job(
             meeting_id=meeting.id,
             celery_task_id=self.request.id if self.request else None,
@@ -94,6 +103,20 @@ def process_meeting(self: Task, meeting_id_str: str) -> dict[str, Any]:
         ext = Path(meeting.audio_key).suffix or ".mp3"
         local_orig_path = work_dir / f"original{ext}"
         storage.download_to(meeting.audio_key, local_orig_path)
+
+        # Check for simulated forced failure for tests (per docs/TESTING.md)
+        if (
+            (settings.TRANSCRIBER == "fake" or settings.LLM_PROVIDER == "fake")
+            and (
+                "fail" in (meeting.original_filename or "").lower()
+                or "fail" in (meeting.title or "").lower()
+                or "fail" in (meeting.audio_key or "").lower()
+            )
+            and prior_failed_jobs == 0
+        ):
+            raise RuntimeError(
+                f"Simulated forced failure for test audio: {meeting.original_filename}"
+            )
 
         # Probe duration and metadata
         audio_info = AudioService.probe_audio(local_orig_path)

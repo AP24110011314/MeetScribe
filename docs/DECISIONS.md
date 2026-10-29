@@ -97,11 +97,21 @@ This file records non-obvious technical decisions, assumptions, and rationales t
 4. **Synchronized Click-to-Seek & Auto-Scroll**:
    - Meeting detail player synchronizes current playback time with transcript segments. Clicking any segment seeks the player, while an auto-scroll observer keeps the active dialogue in view when "Follow Along" is enabled.
 5. **Hybrid List and Kanban Board for Action Items**:
-   - Action items page supports toggling between a chronological list view and a two-column Kanban board (To Do / Completed) with one-click status transitions and overdue alerts.
-
-
-
-
-
+   - Action items page supports toggling between a chronological list view and a two-column Kanban board (To Do / Completed) with one-click status transitions and overdue alerts.## Phase 9: End-to-End Verification
+1. **Playwright Test Execution with Fake Providers**:
+   - Browser E2E tests run against the live API and Celery worker with `TRANSCRIBER=fake` and `LLM_PROVIDER=fake` to execute deterministic, fast tests (entire 10-test suite completes in ~24s) without incurring Whisper CPU model loading overhead or LLM costs.
+2. **Forced Failure Simulation**:
+   - Pipeline tasks detect test failure files by inspecting `meeting.original_filename` for `"fail"` during initial execution (`prior_failed_jobs == 0`). On retry (`POST /meetings/{id}/retry`), the failure check succeeds because `prior_failed_jobs > 0`, proving that retry transitions failed meetings back to `queued` and successfully completes to `done`.
+3. **Live Smoke Test vs Crash Recovery**:
+   - `scripts/smoke_test.py` validates the complete live stack end-to-end against real `faster-whisper` and the analysis pipeline on port 8000.
+   - `scripts/test_crash_recovery.py` runs against a 35-minute looped audio file, terminates the worker mid-transcription (`kill -9`), triggers the reaper to reclaim the stalled job, and verifies that the restarted worker processes chunks and yields 100% unique transcript segments with `process_attempts=2`.
+## Phase 9: End-to-End Verification
+1. **Playwright Test Execution with Fake Providers**:
+   - Browser E2E tests run against the live API and Celery worker with `TRANSCRIBER=fake` and `LLM_PROVIDER=fake` to execute deterministic, fast tests (entire 10-test suite completes in ~24s) without incurring Whisper CPU model loading overhead or LLM costs.
+2. **Forced Failure Simulation**:
+   - Pipeline tasks detect test failure files by inspecting `meeting.original_filename` for `"fail"` during initial execution (`prior_failed_jobs == 0`). On retry (`POST /meetings/{id}/retry`), the failure check succeeds because `prior_failed_jobs > 0`, proving that retry transitions failed meetings back to `queued` and successfully completes to `done`.
+3. **Live Smoke Test vs Crash Recovery**:
+   - `scripts/smoke_test.py` validates the complete live stack end-to-end against real `faster-whisper` and the analysis pipeline on port 8000.
+   - `scripts/test_crash_recovery.py` runs against a 35-minute looped audio file, terminates the worker mid-transcription (`kill -9`), triggers the reaper to reclaim the stalled job, and verifies that the restarted worker processes chunks and yields 100% unique transcript segments with `process_attempts=2`.
 
 

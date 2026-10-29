@@ -97,7 +97,7 @@ class ActionItemCreateRequest(BaseModel):
     owner: Optional[str] = None
     due_date: Optional[date] = None
     priority: str = Field(default="medium", pattern="^(low|medium|high)$")
-    status: str = Field(default="open", pattern="^(open|in_progress|completed|cancelled)$")
+    status: str = Field(default="open", pattern="^(open|in_progress|done|completed|cancelled)$")
 
     @field_validator("description")
     @classmethod
@@ -113,7 +113,7 @@ class ActionItemUpdateRequest(BaseModel):
     owner: Optional[str] = None
     due_date: Optional[date] = None
     priority: Optional[str] = Field(None, pattern="^(low|medium|high)$")
-    status: Optional[str] = Field(None, pattern="^(open|in_progress|completed|cancelled)$")
+    status: Optional[str] = Field(None, pattern="^(open|in_progress|done|completed|cancelled)$")
 
     @field_validator("description")
     @classmethod

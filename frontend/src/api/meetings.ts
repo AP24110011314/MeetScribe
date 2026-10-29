@@ -52,14 +52,14 @@ export async function requestPresignedUpload(
   content_type: string,
   size_bytes: number
 ): Promise<PresignedUploadResponse> {
-  return apiFetch<PresignedUploadResponse>('/meetings/upload', {
+  return apiFetch<PresignedUploadResponse>('/meetings', {
     method: 'POST',
     body: JSON.stringify({ filename, content_type, size_bytes }),
   });
 }
 
 export async function completeUpload(meetingId: string): Promise<MeetingStatusData> {
-  return apiFetch<MeetingStatusData>(`/meetings/${meetingId}/upload-complete`, {
+  return apiFetch<MeetingStatusData>(`/meetings/${meetingId}/complete`, {
     method: 'POST',
   });
 }
@@ -68,8 +68,20 @@ export async function uploadAudioFile(
   file: File,
   onProgress?: (percent: number) => void
 ): Promise<string> {
+  const mimeType =
+    file.type ||
+    (file.name.endsWith('.mp3')
+      ? 'audio/mpeg'
+      : file.name.endsWith('.wav')
+      ? 'audio/wav'
+      : file.name.endsWith('.m4a')
+      ? 'audio/mp4'
+      : file.name.endsWith('.mp4')
+      ? 'video/mp4'
+      : 'audio/mpeg');
+
   // 1. Request presigned URL
-  const uploadInfo = await requestPresignedUpload(file.name, file.type || 'audio/wav', file.size);
+  const uploadInfo = await requestPresignedUpload(file.name, mimeType, file.size);
 
   // 2. Upload file directly via presigned PUT
   await new Promise<void>((resolve, reject) => {
@@ -84,7 +96,7 @@ export async function uploadAudioFile(
     }
 
     if (!uploadInfo.upload_headers || !uploadInfo.upload_headers['Content-Type']) {
-      xhr.setRequestHeader('Content-Type', file.type || 'audio/wav');
+      xhr.setRequestHeader('Content-Type', mimeType);
     }
 
     if (xhr.upload && onProgress) {
@@ -168,3 +180,4 @@ export async function createMeetingActionItem(
     body: JSON.stringify(data),
   });
 }
+

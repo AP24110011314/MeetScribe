@@ -142,3 +142,4 @@ describe('Dashboard Page (U04)', () => {
     expect(screen.getByText('Design Review')).toBeInTheDocument();
   });
 });
+

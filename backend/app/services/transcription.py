@@ -141,7 +141,11 @@ class FakeTranscriber:
         """
         Deterministic mock transcriber for test suites and offline pipeline execution.
         Returns the standard meeting script with realistic timestamps.
+        Throws if filename contains 'fail' to support testing failure paths.
         """
+        if "fail" in str(wav_path).lower():
+            raise RuntimeError(f"Simulated transcription failure for {wav_path.name}")
+
         try:
             info = AudioService.probe_audio(wav_path)
             duration = info["duration_sec"]

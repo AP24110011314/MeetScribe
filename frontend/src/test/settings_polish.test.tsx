@@ -77,3 +77,4 @@ describe('Settings & UI Polish (U13, U14)', () => {
     expect(screen.getByText('Page Not Found')).toBeInTheDocument();
   });
 });
+
