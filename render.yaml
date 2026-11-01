@@ -1,14 +1,14 @@
 # Render Infrastructure as Code (Blueprint) for MeetScribe
 # Deploy all backend services with one click on https://render.com
 services:
-  # 1. FastAPI REST API Server
+  # 1. FastAPI REST API Server + Celery Background Worker & Beat (All-in-One Free Tier)
   - type: web
     name: meetscribe-api
     runtime: python
     region: oregon
-    plan: starter
+    plan: free
     buildCommand: "./scripts/render_build.sh"
-    startCommand: "cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    startCommand: "./scripts/render_start.sh"
     healthCheckPath: "/healthz"
     envVars:
       - key: ENV
@@ -55,88 +55,17 @@ services:
       - key: WHISPER_COMPUTE_TYPE
         value: int8
 
-  # 2. Celery Background Worker + Beat Scheduler
-  - type: worker
-    name: meetscribe-worker
-    runtime: python
-    region: oregon
-    plan: starter
-    buildCommand: "./scripts/render_build.sh"
-    startCommand: "cd backend && celery -A app.workers.celery_app worker --beat --loglevel=info --pool=solo"
-    envVars:
-      - key: ENV
-        value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: meetscribe-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: meetscribe-redis
-          property: connectionString
-      - key: JWT_SECRET
-        fromService:
-          type: web
-          name: meetscribe-api
-          property: envVar
-          envVarKey: JWT_SECRET
-      - key: STORAGE_BACKEND
-        value: s3
-      - key: S3_BUCKET
-        fromService:
-          type: web
-          name: meetscribe-api
-          property: envVar
-          envVarKey: S3_BUCKET
-      - key: S3_REGION
-        value: us-east-1
-      - key: S3_ACCESS_KEY
-        fromService:
-          type: web
-          name: meetscribe-api
-          property: envVar
-          envVarKey: S3_ACCESS_KEY
-      - key: S3_SECRET_KEY
-        fromService:
-          type: web
-          name: meetscribe-api
-          property: envVar
-          envVarKey: S3_SECRET_KEY
-      - key: S3_ENDPOINT_URL
-        value: ""
-      - key: S3_PUBLIC_ENDPOINT_URL
-        value: ""
-      - key: LLM_PROVIDER
-        value: gemini
-      - key: LLM_MODEL
-        value: gemini-2.5-flash
-      - key: LLM_API_KEY
-        fromService:
-          type: web
-          name: meetscribe-api
-          property: envVar
-          envVarKey: LLM_API_KEY
-      - key: TRANSCRIBER
-        value: faster_whisper
-      - key: WHISPER_MODEL
-        value: small
-      - key: WHISPER_DEVICE
-        value: cpu
-      - key: WHISPER_COMPUTE_TYPE
-        value: int8
-
 databases:
   # Managed PostgreSQL 16
   - name: meetscribe-db
     databaseName: meetscribe
     user: meetscribe
     region: oregon
-    plan: starter
+    plan: free
 
   # Managed Redis
   - name: meetscribe-redis
     region: oregon
-    plan: starter
+    plan: free
     maxmemoryPolicy: noeviction
 
