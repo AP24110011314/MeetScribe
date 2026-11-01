@@ -1,13 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UploadCloud, FileAudio, CheckCircle2, AlertCircle, RefreshCw, ArrowRight, X } from 'lucide-react';
+import { UploadCloud, FileAudio, CheckCircle2, AlertCircle, RefreshCw, ArrowRight, X, Sparkles } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/Button';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Badge } from '@/components/ui/Badge';
+import { WindowChrome } from '@/components/ui/WindowChrome';
 import { useToast } from '@/components/ui/Toast';
 import { getMeetingStatus, retryMeeting, uploadAudioFile } from '@/api/meetings';
 import { MeetingStatusData } from '@/types/meeting';
+import { cn } from '@/lib/utils';
 
 interface QueueItem {
   id: string;
@@ -177,18 +179,29 @@ export function UploadPage() {
     return 'pending';
   };
 
+  const currentPercent =
+    activeItem?.status === 'uploading'
+      ? activeItem.progress
+      : Math.round(activeItem?.statusData?.progress_pct || (activeItem?.status === 'done' ? 100 : 0));
+
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Upload Recording</h1>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold glass-card-subtle text-primary border border-primary/20 mb-2">
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>Whisper Speech Pipeline</span>
+        </div>
+        <h1 className="text-3xl font-extrabold tracking-tight">Upload Recording</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Drop meeting audio to transcribe and extract summaries, decisions, and action items.
+          Drop meeting audio or video to transcribe and extract summaries, decisions, and action items.
         </p>
       </div>
 
-      {/* Upload Dropzone */}
-      <div
+      {/* Large macOS Glass Dropzone with Animated Border */}
+      <motion.div
         data-testid="upload-dropzone"
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
         onDragOver={(e) => {
           e.preventDefault();
           setIsDragging(true);
@@ -196,100 +209,100 @@ export function UploadPage() {
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
-        className={`relative flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-2xl cursor-pointer transition-all ${
+        className={cn(
+          'relative flex flex-col items-center justify-center p-10 sm:p-14 border-2 border-dashed rounded-3xl cursor-pointer transition-all duration-200 glass-card text-center',
           isDragging
-            ? 'border-primary bg-primary/10'
-            : 'border-border hover:border-primary/50 hover:bg-muted/40 bg-card'
-        }`}
+            ? 'border-primary ring-4 ring-primary/25 bg-primary/10 shadow-2xl scale-[1.01]'
+            : 'border-white/20 hover:border-primary/60 hover:shadow-xl'
+        )}
       >
         <input
           ref={fileInputRef}
           data-testid="upload-file-input"
           type="file"
-          accept=".mp3,.wav,.m4a,.mp4,.webm,.ogg"
+          accept=".mp3,.wav,.m4a,.mp4,.webm,.ogg,audio/*,video/*"
           className="hidden"
           onChange={(e) => {
             if (e.target.files) handleFiles(e.target.files);
           }}
         />
 
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-4 shadow-sm">
-          <UploadCloud className="h-8 w-8" />
+        {/* Central Glowing Icon / Progress Ring Container */}
+        <div className="relative mb-5">
+          <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-primary/15 text-primary border border-primary/25 shadow-lg group-hover:scale-105 transition-transform">
+            <UploadCloud className="h-10 w-10 drop-shadow-sm" />
+          </div>
         </div>
 
-        <h3 className="text-lg font-semibold text-foreground">Click to upload or drag & drop</h3>
-        <p className="text-sm text-muted-foreground mt-1">
-          MP3, WAV, M4A, MP4, WebM, or OGG up to {MAX_UPLOAD_MB} MB
+        <h3 className="text-xl font-bold text-foreground">Click to upload or drag & drop</h3>
+        <p className="text-sm text-muted-foreground mt-1.5 max-w-md">
+          Direct presigned transfer for MP3, WAV, M4A, MP4, WebM, or OGG up to {MAX_UPLOAD_MB} MB.
         </p>
-      </div>
+        <div className="mt-4 flex items-center gap-2">
+          <span className="text-[11px] font-medium px-3 py-1 rounded-full glass-card-subtle text-muted-foreground border border-white/10">
+            Audio & Video Supported
+          </span>
+          <span className="text-[11px] font-medium px-3 py-1 rounded-full glass-card-subtle text-muted-foreground border border-white/10">
+            16 kHz Mono Normalization
+          </span>
+        </div>
+      </motion.div>
 
       {/* Active Processing Step Tracker */}
       {activeItem && (
-        <Card className="border-border shadow-md">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <FileAudio className="h-5 w-5 text-primary" />
-                  <span>{activeItem.file.name}</span>
-                </CardTitle>
-                <CardDescription>
-                  {(activeItem.file.size / (1024 * 1024)).toFixed(2)} MB
-                </CardDescription>
-              </div>
-
-              {activeItem.status === 'done' && (
-                <Badge variant="success" className="gap-1">
+        <div className="glass-card rounded-3xl border border-white/20 shadow-2xl overflow-hidden backdrop-blur-2xl">
+          <WindowChrome
+            title={activeItem.file.name}
+            subtitle={`${(activeItem.file.size / (1024 * 1024)).toFixed(2)} MB`}
+            actions={
+              activeItem.status === 'done' ? (
+                <Badge variant="success" className="gap-1 shadow-sm">
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   <span>Completed</span>
                 </Badge>
-              )}
-              {activeItem.status === 'failed' && (
-                <Badge variant="destructive" className="gap-1">
+              ) : activeItem.status === 'failed' ? (
+                <Badge variant="destructive" className="gap-1 shadow-sm">
                   <AlertCircle className="h-3.5 w-3.5" />
                   <span>Failed</span>
                 </Badge>
-              )}
-              {activeItem.status === 'processing' && (
+              ) : (
                 <Badge variant="secondary" className="gap-1 animate-pulse">
                   <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                   <span>Processing</span>
                 </Badge>
-              )}
-            </div>
-          </CardHeader>
+              )
+            }
+          />
 
-          <CardContent className="space-y-6">
-            {/* Progress bar */}
+          <div className="p-6 sm:p-8 space-y-6">
+            {/* Progress Bar & Header */}
             <div className="space-y-2">
-              <div className="flex justify-between text-xs font-medium text-muted-foreground">
-                <span>Progress</span>
-                <span>
+              <div className="flex justify-between text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <span className="flex items-center gap-2">
+                  <FileAudio className="h-4 w-4 text-primary" />
+                  Pipeline Progress
+                </span>
+                <span className="font-mono tabular-nums text-foreground">
                   {activeItem.status === 'uploading'
                     ? `${activeItem.progress}% (Uploading)`
-                    : `${Math.round(activeItem.statusData?.progress_pct || 0)}%`}
+                    : `${currentPercent}%`}
                 </span>
               </div>
-              <ProgressBar
-                value={
-                  activeItem.status === 'uploading'
-                    ? activeItem.progress
-                    : activeItem.statusData?.progress_pct || 0
-                }
-              />
+              <ProgressBar value={currentPercent} />
             </div>
 
-            {/* Step Tracker (U06) */}
+            {/* Glowing Active Step Tracker (U06) */}
             <div data-testid="step-tracker" className="pt-2">
-              <div className="grid grid-cols-5 gap-2 text-center text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-center text-xs">
                 {/* Uploaded */}
                 <div
                   data-testid="step-uploaded"
-                  className={`p-2.5 rounded-lg border font-medium ${
+                  className={cn(
+                    'p-3 rounded-2xl border font-semibold transition-all duration-300 min-h-[44px] flex items-center justify-center',
                     getStepStatus('uploaded') === 'completed'
-                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                      : 'border-border text-muted-foreground'
-                  }`}
+                      ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                      : 'border-white/10 glass-card-subtle text-muted-foreground'
+                  )}
                 >
                   Uploaded
                 </div>
@@ -297,13 +310,14 @@ export function UploadPage() {
                 {/* Preparing */}
                 <div
                   data-testid="step-preparing"
-                  className={`p-2.5 rounded-lg border font-medium ${
+                  className={cn(
+                    'p-3 rounded-2xl border font-semibold transition-all duration-300 min-h-[44px] flex items-center justify-center',
                     getStepStatus('preparing') === 'completed'
-                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                      ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 shadow-sm'
                       : getStepStatus('preparing') === 'active'
-                      ? 'border-primary bg-primary/10 text-primary animate-pulse'
-                      : 'border-border text-muted-foreground'
-                  }`}
+                      ? 'border-primary ring-2 ring-primary/40 bg-primary/20 text-primary shadow-lg animate-pulse'
+                      : 'border-white/10 glass-card-subtle text-muted-foreground'
+                  )}
                 >
                   Preparing
                 </div>
@@ -311,13 +325,14 @@ export function UploadPage() {
                 {/* Transcribing */}
                 <div
                   data-testid="step-transcribing"
-                  className={`p-2.5 rounded-lg border font-medium ${
+                  className={cn(
+                    'p-3 rounded-2xl border font-semibold transition-all duration-300 min-h-[44px] flex items-center justify-center',
                     getStepStatus('transcribing') === 'completed'
-                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                      ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 shadow-sm'
                       : getStepStatus('transcribing') === 'active'
-                      ? 'border-primary bg-primary/10 text-primary animate-pulse'
-                      : 'border-border text-muted-foreground'
-                  }`}
+                      ? 'border-primary ring-2 ring-primary/40 bg-primary/20 text-primary shadow-lg animate-pulse'
+                      : 'border-white/10 glass-card-subtle text-muted-foreground'
+                  )}
                 >
                   Transcribing
                 </div>
@@ -325,13 +340,14 @@ export function UploadPage() {
                 {/* Analyzing */}
                 <div
                   data-testid="step-analyzing"
-                  className={`p-2.5 rounded-lg border font-medium ${
+                  className={cn(
+                    'p-3 rounded-2xl border font-semibold transition-all duration-300 min-h-[44px] flex items-center justify-center',
                     getStepStatus('analyzing') === 'completed'
-                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                      ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 shadow-sm'
                       : getStepStatus('analyzing') === 'active'
-                      ? 'border-primary bg-primary/10 text-primary animate-pulse'
-                      : 'border-border text-muted-foreground'
-                  }`}
+                      ? 'border-primary ring-2 ring-primary/40 bg-primary/20 text-primary shadow-lg animate-pulse'
+                      : 'border-white/10 glass-card-subtle text-muted-foreground'
+                  )}
                 >
                   Analyzing
                 </div>
@@ -339,11 +355,12 @@ export function UploadPage() {
                 {/* Done */}
                 <div
                   data-testid="step-done"
-                  className={`p-2.5 rounded-lg border font-medium ${
+                  className={cn(
+                    'p-3 rounded-2xl border font-semibold transition-all duration-300 min-h-[44px] flex items-center justify-center col-span-2 sm:col-span-1',
                     getStepStatus('done') === 'completed'
-                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                      : 'border-border text-muted-foreground'
-                  }`}
+                      ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 shadow-sm'
+                      : 'border-white/10 glass-card-subtle text-muted-foreground'
+                  )}
                 >
                   Done
                 </div>
@@ -352,17 +369,17 @@ export function UploadPage() {
 
             {/* Error & Retry state */}
             {activeItem.status === 'failed' && (
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-2xl bg-destructive/15 border border-destructive/25 text-destructive">
+                <div className="flex items-center gap-2.5">
                   <AlertCircle className="h-5 w-5 shrink-0" />
-                  <p className="text-sm font-medium">{activeItem.error || 'Pipeline error'}</p>
+                  <p className="text-sm font-semibold">{activeItem.error || 'Pipeline error'}</p>
                 </div>
                 <Button
                   data-testid="retry-button"
                   variant="destructive"
                   size="sm"
                   onClick={handleRetry}
-                  className="gap-2 shrink-0"
+                  className="gap-2 shrink-0 shadow-md"
                 >
                   <RefreshCw className="h-4 w-4" />
                   <span>Retry Processing</span>
@@ -374,31 +391,32 @@ export function UploadPage() {
             {activeItem.status === 'done' && (
               <div className="flex justify-end pt-2">
                 <Button
+                  size="lg"
                   onClick={() => navigate(`/meetings/${activeItem.meetingId}`)}
-                  className="gap-2"
+                  className="gap-2 shadow-xl shadow-primary/20"
                 >
                   <span>View Meeting Notes</span>
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
 
       {/* Upload Queue */}
       {queue.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-base font-semibold">Upload Queue ({queue.length})</h2>
+          <h2 className="text-base font-bold">Upload Queue ({queue.length})</h2>
           <div className="space-y-2">
             {queue.map((item) => (
               <div
                 key={item.id}
                 data-testid="upload-queue-item"
-                className="flex items-center justify-between p-3.5 rounded-xl border bg-card text-card-foreground shadow-sm"
+                className="flex items-center justify-between p-3.5 rounded-2xl glass-card-subtle border border-white/15 shadow-sm"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <FileAudio className="h-5 w-5 text-muted-foreground shrink-0" />
+                  <FileAudio className="h-5 w-5 text-primary shrink-0" />
                   <div className="truncate">
                     <p className="text-sm font-medium truncate">{item.file.name}</p>
                     <p className="text-xs text-muted-foreground">
@@ -420,8 +438,9 @@ export function UploadPage() {
                     {item.status}
                   </Badge>
                   <button
+                    type="button"
                     onClick={() => setQueue((prev) => prev.filter((q) => q.id !== item.id))}
-                    className="p-1 text-muted-foreground hover:text-foreground"
+                    className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-white/10 transition-colors"
                   >
                     <X className="h-4 w-4" />
                   </button>
