@@ -35,24 +35,67 @@ class S3StorageService:
         self.public_endpoint_url = (
             settings.S3_PUBLIC_ENDPOINT_URL or settings.S3_ENDPOINT_URL or None
         )
+        self.region_name = settings.S3_REGION
 
-        # MinIO requires path-style addressing; real AWS S3 (when endpoint_url is None) requires auto/virtual-host style
-        s3_extra: dict[str, Any] = {}
-        if self.endpoint_url:
-            s3_extra["addressing_style"] = "path"
+        # If connecting to real AWS S3 (no custom endpoint specified), auto-detect bucket and regional endpoint
+        if not self.endpoint_url:
+            try:
+                probe_client = boto3.client(
+                    "s3",
+                    aws_access_key_id=settings.S3_ACCESS_KEY,
+                    aws_secret_access_key=settings.S3_SECRET_KEY,
+                    region_name=self.region_name,
+                )
+                # Auto-heal bucket name if user configured 'meetscribe' instead of 'meetscribebucket'
+                try:
+                    bucket_list = [
+                        b["Name"] for b in probe_client.list_buckets().get("Buckets", [])
+                    ]
+                    if self.bucket not in bucket_list and len(bucket_list) == 1:
+                        self.bucket = bucket_list[0]
+                except Exception:
+                    pass
+
+                # Auto-heal bucket region to prevent 307 TemporaryRedirect
+                loc = probe_client.get_bucket_location(Bucket=self.bucket)
+                actual_region = loc.get("LocationConstraint")
+                if actual_region:
+                    self.region_name = "eu-west-1" if actual_region == "EU" else actual_region
+            except Exception:
+                pass
+
+            regional_endpoint = f"https://s3.{self.region_name}.amazonaws.com"
+            self.endpoint_url = regional_endpoint
+            if not self.public_endpoint_url:
+                self.public_endpoint_url = regional_endpoint
+
+        is_custom_s3 = self.endpoint_url is not None and (
+            "localhost" in self.endpoint_url or "127.0.0.1" in self.endpoint_url
+        )
+        s3_extra: dict[str, Any] = (
+            {"addressing_style": "path"} if is_custom_s3 else {"addressing_style": "virtual"}
+        )
 
         boto_config = Config(
             signature_version="s3v4",
-            s3=s3_extra if s3_extra else None,
+            s3=s3_extra,
         )
 
-        presign_s3_extra: dict[str, Any] = {}
-        if self.public_endpoint_url:
-            presign_s3_extra["addressing_style"] = "path"
+        presign_s3_extra: dict[str, Any] = (
+            {"addressing_style": "path"}
+            if (
+                self.public_endpoint_url is not None
+                and (
+                    "localhost" in self.public_endpoint_url
+                    or "127.0.0.1" in self.public_endpoint_url
+                )
+            )
+            else {"addressing_style": "virtual"}
+        )
 
         presign_boto_config = Config(
             signature_version="s3v4",
-            s3=presign_s3_extra if presign_s3_extra else None,
+            s3=presign_s3_extra,
         )
 
         # Internal client for server-side calls (head, download, upload, delete)
@@ -61,7 +104,7 @@ class S3StorageService:
             endpoint_url=self.endpoint_url,
             aws_access_key_id=settings.S3_ACCESS_KEY,
             aws_secret_access_key=settings.S3_SECRET_KEY,
-            region_name=settings.S3_REGION,
+            region_name=self.region_name,
             config=boto_config,
         )
 
@@ -71,7 +114,7 @@ class S3StorageService:
             endpoint_url=self.public_endpoint_url,
             aws_access_key_id=settings.S3_ACCESS_KEY,
             aws_secret_access_key=settings.S3_SECRET_KEY,
-            region_name=settings.S3_REGION,
+            region_name=self.region_name,
             config=presign_boto_config,
         )
 
