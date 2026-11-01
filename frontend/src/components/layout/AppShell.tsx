@@ -16,6 +16,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
+  Trash2,
+  Bell,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -24,7 +29,14 @@ import { CommandPalette } from '@/components/CommandPalette';
 import { KeyboardShortcutsModal } from '@/components/KeyboardShortcutsModal';
 import { GradientMeshBackground } from '@/components/ui/GradientMeshBackground';
 import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher';
+import { FoldersSidebarSection } from '@/components/layout/FoldersSidebarSection';
 import { cn } from '@/lib/utils';
+import {
+  getNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+} from '@/api/meetings';
+import { NotificationData } from '@/types/meeting';
 
 export function AppShell() {
   const { user, logout } = useAuth();
@@ -38,6 +50,55 @@ export function AppShell() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+
+  // Phase D: Notifications state
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationData[]>([]);
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+
+  const loadNotifications = async () => {
+    try {
+      const data = await getNotifications();
+      setNotifications(data.items);
+      setUnreadNotifCount(data.unread_count);
+    } catch {
+      // ignore load errors
+    }
+  };
+
+  useEffect(() => {
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleMarkNotificationRead = async (notif: NotificationData) => {
+    try {
+      if (!notif.is_read) {
+        await markNotificationRead(notif.id);
+        setNotifications((prev) =>
+          prev.map((n) => (n.id === notif.id ? { ...n, is_read: true } : n))
+        );
+        setUnreadNotifCount((prev) => Math.max(0, prev - 1));
+      }
+      if (notif.link_url) {
+        setNotificationsOpen(false);
+        navigate(notif.link_url);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    try {
+      await markAllNotificationsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      setUnreadNotifCount(0);
+    } catch {
+      // ignore
+    }
+  };
 
   // Close mobile drawer on route change
   useEffect(() => {
@@ -122,6 +183,7 @@ export function AppShell() {
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/meetings', label: 'Meetings', icon: Calendar },
     { to: '/action-items', label: 'Action Items', icon: CheckSquare },
+    { to: '/trash', label: 'Trash', icon: Trash2 },
     { to: '/settings', label: 'Settings', icon: Settings },
   ];
 
@@ -208,6 +270,11 @@ export function AppShell() {
           })}
         </nav>
 
+        {/* Folders Section */}
+        <div className="border-t border-white/10">
+          <FoldersSidebarSection isCollapsed={isCollapsed} />
+        </div>
+
         {/* Shortcuts & Preferences */}
         <div className="px-3 py-2 border-t border-white/10 space-y-1">
           <button
@@ -280,6 +347,93 @@ export function AppShell() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Notification Bell (Phase D: F36, U24) */}
+            <div className="relative">
+              <button
+                type="button"
+                data-testid="notification-bell"
+                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                className="relative p-2 rounded-xl text-muted-foreground hover:bg-white/10 hover:text-foreground transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
+                title="Notifications"
+              >
+                <Bell className="h-4 w-4" />
+                {unreadNotifCount > 0 && (
+                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-primary ring-2 ring-background animate-pulse" />
+                )}
+              </button>
+
+              {/* Notification Popover Dropdown */}
+              {notificationsOpen && (
+                <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 rounded-2xl glass-card border border-white/20 shadow-2xl z-50 p-4 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-white/10">
+                    <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
+                      <Bell className="h-3.5 w-3.5 text-primary" />
+                      <span>Notifications</span>
+                      {unreadNotifCount > 0 && (
+                        <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-primary/20 text-primary font-bold">
+                          {unreadNotifCount}
+                        </span>
+                      )}
+                    </div>
+                    {unreadNotifCount > 0 && (
+                      <button
+                        type="button"
+                        data-testid="notification-read-all"
+                        onClick={handleMarkAllNotificationsRead}
+                        className="text-[11px] text-primary hover:underline font-medium"
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-72 overflow-y-auto space-y-2">
+                    {notifications.length === 0 ? (
+                      <div className="p-6 text-center text-xs text-muted-foreground">
+                        No notifications yet.
+                      </div>
+                    ) : (
+                      notifications.map((notif) => (
+                        <div
+                          key={notif.id}
+                          data-testid="notification-item"
+                          onClick={() => handleMarkNotificationRead(notif)}
+                          className={cn(
+                            'p-2.5 rounded-xl border text-xs cursor-pointer transition-all flex items-start gap-2.5',
+                            notif.is_read
+                              ? 'glass-card-subtle border-white/5 opacity-70 hover:opacity-100'
+                              : 'glass-card border-primary/30 bg-primary/5 hover:border-primary/50'
+                          )}
+                        >
+                          <div className="mt-0.5 shrink-0">
+                            {notif.type === 'meeting_completed' ? (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                            ) : notif.type === 'meeting_failed' ? (
+                              <AlertCircle className="h-3.5 w-3.5 text-rose-400" />
+                            ) : (
+                              <Clock className="h-3.5 w-3.5 text-amber-400" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0 space-y-0.5">
+                            <div className="font-semibold text-foreground truncate">{notif.title}</div>
+                            <div className="text-[11px] text-muted-foreground line-clamp-2 leading-tight">
+                              {notif.message}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground/60 pt-0.5">
+                              {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          </div>
+                          {!notif.is_read && (
+                            <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0 mt-1.5" />
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Theme & Palette Switcher */}
             <ThemeSwitcher variant="compact" />
 

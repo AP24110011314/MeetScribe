@@ -15,6 +15,8 @@ import { MeetingDetailPage } from '@/pages/MeetingDetailPage';
 import { ActionItemsPage } from '@/pages/ActionItemsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { UploadPage } from '@/pages/UploadPage';
+import { TrashPage } from '@/pages/TrashPage';
+import { PublicSharePage } from '@/pages/PublicSharePage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 
 const queryClient = new QueryClient({
@@ -38,6 +40,7 @@ export function App() {
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
+                <Route path="/share/:token" element={<PublicSharePage />} />
 
                 {/* Protected routes */}
                 <Route
@@ -53,6 +56,7 @@ export function App() {
                   <Route path="/action-items" element={<ActionItemsPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="/upload" element={<UploadPage />} />
+                  <Route path="/trash" element={<TrashPage />} />
                 </Route>
 
                 {/* 404 handler */}

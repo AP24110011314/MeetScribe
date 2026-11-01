@@ -26,6 +26,14 @@ celery_app.conf.update(
             "task": "app.workers.reaper.reap_stuck_jobs",
             "schedule": 60.0,
         },
+        "purge-expired-trash-every-hour": {
+            "task": "app.workers.reaper.purge_expired_trash",
+            "schedule": 3600.0,
+        },
+        "check-action-item-due-dates-daily": {
+            "task": "app.workers.reaper.check_action_item_due_dates",
+            "schedule": 86400.0,
+        },
     },
 )
 

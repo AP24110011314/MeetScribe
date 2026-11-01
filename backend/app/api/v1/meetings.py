@@ -2,16 +2,25 @@ import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import distinct, func, or_, select
+from sqlalchemy import distinct, func, insert, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.api.deps import get_current_user, get_owned_meeting
 from app.core.config import settings
-from app.db.models import ActionItem, Meeting, Transcript, User
+from app.db.models import (
+    ActionItem,
+    Folder,
+    Meeting,
+    MeetingBookmark,
+    Transcript,
+    User,
+    meeting_tags,
+)
 from app.db.session import get_db
 from app.schemas.meeting import (
     ActionItemCreateRequest,
@@ -28,7 +37,26 @@ from app.schemas.meeting import (
     TranscriptResponse,
     TranscriptSegment,
 )
-from app.services.export import export_markdown, export_pdf
+from app.schemas.organization import (
+    BookmarkCreateRequest,
+    BookmarkResponse,
+    MeetingBulkRequest,
+    MeetingBulkResponse,
+    MeetingOrganizeRequest,
+    MeetingPasteRequest,
+    SegmentEditRequest,
+    TagResponse,
+)
+from app.services.export import (
+    export_docx,
+    export_ics,
+    export_json,
+    export_markdown,
+    export_pdf,
+    export_srt,
+    export_txt,
+    export_vtt,
+)
 from app.services.storage import get_storage_service
 
 router = APIRouter(prefix="/meetings", tags=["Meetings"])
@@ -132,16 +160,33 @@ async def list_meetings(
     db: Annotated[AsyncSession, Depends(get_db)],
     q: Optional[str] = Query(None, description="Search term across title and transcript"),
     status_filter: Optional[str] = Query(None, alias="status"),
+    folder_id: Optional[uuid.UUID] = Query(None, description="Filter by folder ID"),
+    tag_id: Optional[uuid.UUID] = Query(None, description="Filter by tag ID"),
+    is_starred: Optional[bool] = Query(None, description="Filter starred meetings"),
     sort: str = Query("created_at", pattern="^(created_at|title|duration|duration_sec)$"),
     order: str = Query("desc", pattern="^(asc|desc)$"),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=10, ge=1, le=100),
 ) -> MeetingListResponse:
     # Outer join Transcript so we can search both title and transcript text
-    conditions = [Meeting.user_id == current_user.id]
+    conditions = [
+        Meeting.user_id == current_user.id,
+        Meeting.deleted_at.is_(None),
+    ]
 
     if status_filter:
         conditions.append(Meeting.status == status_filter)
+
+    if folder_id is not None:
+        conditions.append(Meeting.folder_id == folder_id)
+
+    if is_starred is not None:
+        conditions.append(Meeting.is_starred == is_starred)
+
+    if tag_id is not None:
+        conditions.append(
+            Meeting.id.in_(select(meeting_tags.c.meeting_id).where(meeting_tags.c.tag_id == tag_id))
+        )
 
     if q:
         clean_q = q.strip()
@@ -176,10 +221,14 @@ async def list_meetings(
         .outerjoin(Transcript, Meeting.id == Transcript.meeting_id)
         .where(*conditions)
         .group_by(Meeting.id)
-        .order_by(order_expr)
+        .order_by(Meeting.is_pinned.desc(), order_expr)
         .offset(offset)
         .limit(page_size)
-        .options(selectinload(Meeting.transcript), selectinload(Meeting.action_items))
+        .options(
+            selectinload(Meeting.transcript),
+            selectinload(Meeting.action_items),
+            selectinload(Meeting.tags),
+        )
     )
 
     result = await db.execute(meetings_query)
@@ -196,6 +245,10 @@ async def list_meetings(
                 created_at=m.created_at,
                 has_transcript=m.transcript is not None,
                 action_items_count=len(m.action_items),
+                folder_id=m.folder_id,
+                is_starred=m.is_starred,
+                is_pinned=m.is_pinned,
+                tags=[TagResponse.model_validate(t) for t in m.tags],
             )
         )
 
@@ -288,11 +341,16 @@ async def get_meeting_detail(
 ) -> MeetingDetailResponse:
     stmt = (
         select(Meeting)
-        .where(Meeting.id == meeting_id, Meeting.user_id == current_user.id)
+        .where(
+            Meeting.id == meeting_id,
+            Meeting.user_id == current_user.id,
+            Meeting.deleted_at.is_(None),
+        )
         .options(
             selectinload(Meeting.transcript),
             selectinload(Meeting.summary),
             selectinload(Meeting.action_items),
+            selectinload(Meeting.tags),
         )
     )
     res = await db.execute(stmt)
@@ -337,8 +395,13 @@ async def get_meeting_detail(
         duration_sec=meeting.duration_sec,
         language=meeting.language,
         has_transcript=meeting.transcript is not None,
+        folder_id=meeting.folder_id,
+        is_starred=meeting.is_starred,
+        is_pinned=meeting.is_pinned,
+        template=meeting.template,
         created_at=meeting.created_at,
         updated_at=meeting.updated_at,
+        tags=[TagResponse.model_validate(t) for t in meeting.tags],
         summary=summary_data,
         action_items=action_items_data,
     )
@@ -436,39 +499,386 @@ async def update_meeting(
 @router.delete(
     "/{meeting_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete meeting and clean up storage",
+    summary="Delete meeting (soft-delete to trash by default, or permanent)",
 )
 async def delete_meeting(
     meeting: Annotated[Meeting, Depends(get_owned_meeting)],
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    permanent: bool = Query(False, description="If true, permanently delete immediately"),
 ) -> Response:
-    storage = get_storage_service()
-
-    # Clean up storage prefix and individual keys
-    prefix = f"uploads/{current_user.id}/{meeting.id}/"
-    try:
-        storage.delete(prefix)
-    except Exception:
-        pass
-
-    if meeting.audio_key:
+    if permanent:
+        storage = get_storage_service()
+        prefix = f"uploads/{current_user.id}/{meeting.id}/"
         try:
-            storage.delete(meeting.audio_key)
+            storage.delete(prefix)
         except Exception:
             pass
 
-    if meeting.normalized_key:
-        try:
-            storage.delete(meeting.normalized_key)
-        except Exception:
-            pass
+        if meeting.audio_key:
+            try:
+                storage.delete(meeting.audio_key)
+            except Exception:
+                pass
 
-    # Database cascade delete removes transcripts, summaries, action_items, jobs
-    await db.delete(meeting)
-    await db.commit()
+        if meeting.normalized_key:
+            try:
+                storage.delete(meeting.normalized_key)
+            except Exception:
+                pass
+
+        # Database cascade delete removes transcripts, summaries, action_items, jobs
+        await db.delete(meeting)
+        await db.commit()
+    else:
+        meeting.deleted_at = datetime.now(timezone.utc)
+        await db.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.patch(
+    "/{meeting_id}/organize",
+    response_model=MeetingDetailResponse,
+    summary="Organize meeting: update folder, star, or pin status",
+)
+async def organize_meeting(
+    meeting: Annotated[Meeting, Depends(get_owned_meeting)],
+    data: MeetingOrganizeRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MeetingDetailResponse:
+    if data.folder_id is not None:
+        if str(data.folder_id) == "00000000-0000-0000-0000-000000000000":
+            meeting.folder_id = None
+        else:
+            f_stmt = select(Folder).where(
+                Folder.id == data.folder_id, Folder.user_id == current_user.id
+            )
+            f_res = await db.execute(f_stmt)
+            if not f_res.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found"
+                )
+            meeting.folder_id = data.folder_id
+
+    if data.is_starred is not None:
+        meeting.is_starred = data.is_starred
+    if data.is_pinned is not None:
+        meeting.is_pinned = data.is_pinned
+
+    meeting.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(meeting)
+    return await get_meeting_detail(meeting.id, current_user, db)
+
+
+@router.post(
+    "/bulk",
+    response_model=MeetingBulkResponse,
+    summary="Bulk actions across multiple meetings (star, unstar, pin, unpin, move, tag, trash, delete)",
+)
+async def bulk_meetings_action(
+    data: MeetingBulkRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MeetingBulkResponse:
+    stmt = select(Meeting).where(
+        Meeting.id.in_(data.meeting_ids), Meeting.user_id == current_user.id
+    )
+    res = await db.execute(stmt)
+    meetings = res.scalars().all()
+    affected = len(meetings)
+    if not meetings:
+        return MeetingBulkResponse(affected_count=0, action=data.action)
+
+    undo_payload = {"action": data.action, "meeting_ids": [str(m.id) for m in meetings]}
+
+    if data.action == "star":
+        for m in meetings:
+            m.is_starred = True
+            m.updated_at = datetime.now(timezone.utc)
+    elif data.action == "unstar":
+        for m in meetings:
+            m.is_starred = False
+            m.updated_at = datetime.now(timezone.utc)
+    elif data.action == "pin":
+        for m in meetings:
+            m.is_pinned = True
+            m.updated_at = datetime.now(timezone.utc)
+    elif data.action == "unpin":
+        for m in meetings:
+            m.is_pinned = False
+            m.updated_at = datetime.now(timezone.utc)
+    elif data.action == "move":
+        if data.folder_id and str(data.folder_id) != "00000000-0000-0000-0000-000000000000":
+            f_stmt = select(Folder).where(
+                Folder.id == data.folder_id, Folder.user_id == current_user.id
+            )
+            f_res = await db.execute(f_stmt)
+            if not f_res.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found"
+                )
+            target_folder_id = data.folder_id
+        else:
+            target_folder_id = None
+        for m in meetings:
+            m.folder_id = target_folder_id
+            m.updated_at = datetime.now(timezone.utc)
+    elif data.action == "tag":
+        if data.tag_ids:
+            for m in meetings:
+                for tid in data.tag_ids:
+                    t_check = await db.execute(
+                        select(meeting_tags).where(
+                            meeting_tags.c.meeting_id == m.id,
+                            meeting_tags.c.tag_id == tid,
+                        )
+                    )
+                    if not t_check.first():
+                        await db.execute(insert(meeting_tags).values(meeting_id=m.id, tag_id=tid))
+    elif data.action == "trash":
+        for m in meetings:
+            m.deleted_at = datetime.now(timezone.utc)
+    elif data.action == "delete":
+        storage = get_storage_service()
+        for m in meetings:
+            prefix = f"uploads/{current_user.id}/{m.id}/"
+            try:
+                storage.delete(prefix)
+            except Exception:
+                pass
+            if m.audio_key:
+                try:
+                    storage.delete(m.audio_key)
+                except Exception:
+                    pass
+            if m.normalized_key:
+                try:
+                    storage.delete(m.normalized_key)
+                except Exception:
+                    pass
+            await db.delete(m)
+
+    await db.commit()
+    return MeetingBulkResponse(
+        affected_count=affected, action=data.action, undo_payload=undo_payload
+    )
+
+
+@router.patch(
+    "/{meeting_id}/transcript/segment",
+    response_model=TranscriptResponse,
+    summary="Edit a transcript segment inline, preserving original text for revert",
+)
+async def edit_transcript_segment(
+    meeting: Annotated[Meeting, Depends(get_owned_meeting)],
+    data: SegmentEditRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> TranscriptResponse:
+    stmt = select(Transcript).where(Transcript.meeting_id == meeting.id)
+    res = await db.execute(stmt)
+    transcript = res.scalar_one_or_none()
+    if not transcript:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transcript not found")
+
+    segments = list(transcript.segments)
+    if data.segment_index < 0 or data.segment_index >= len(segments):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid segment index")
+
+    seg = dict(segments[data.segment_index])
+    if "original_text" not in seg:
+        seg["original_text"] = seg.get("text", "")
+    seg["text"] = data.text
+    segments[data.segment_index] = seg
+
+    transcript.segments = segments
+    flag_modified(transcript, "segments")
+    transcript.full_text = " ".join(s.get("text", "") for s in segments)
+    transcript.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(transcript)
+
+    return TranscriptResponse(
+        language=meeting.language or "en",
+        full_text=transcript.full_text,
+        segments=[
+            TranscriptSegment(
+                id=s["id"],
+                start=s["start"],
+                end=s["end"],
+                text=s["text"],
+            )
+            for s in transcript.segments
+        ],
+    )
+
+
+@router.post(
+    "/{meeting_id}/transcript/revert",
+    response_model=TranscriptResponse,
+    summary="Revert edited segments back to original Whisper transcript text",
+)
+async def revert_transcript(
+    meeting: Annotated[Meeting, Depends(get_owned_meeting)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> TranscriptResponse:
+    stmt = select(Transcript).where(Transcript.meeting_id == meeting.id)
+    res = await db.execute(stmt)
+    transcript = res.scalar_one_or_none()
+    if not transcript:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transcript not found")
+
+    segments = list(transcript.segments)
+    for i, seg in enumerate(segments):
+        seg_dict = dict(seg)
+        if "original_text" in seg_dict:
+            seg_dict["text"] = seg_dict["original_text"]
+            segments[i] = seg_dict
+
+    transcript.segments = segments
+    flag_modified(transcript, "segments")
+    transcript.full_text = " ".join(s.get("text", "") for s in segments)
+    transcript.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(transcript)
+
+    return TranscriptResponse(
+        language=meeting.language or "en",
+        full_text=transcript.full_text,
+        segments=[
+            TranscriptSegment(
+                id=s["id"],
+                start=s["start"],
+                end=s["end"],
+                text=s["text"],
+            )
+            for s in transcript.segments
+        ],
+    )
+
+
+@router.get(
+    "/{meeting_id}/bookmarks",
+    response_model=List[BookmarkResponse],
+    summary="List timestamped bookmarks / personal notes for this meeting",
+)
+async def list_bookmarks(
+    meeting: Annotated[Meeting, Depends(get_owned_meeting)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> List[BookmarkResponse]:
+    stmt = (
+        select(MeetingBookmark)
+        .where(MeetingBookmark.meeting_id == meeting.id)
+        .order_by(MeetingBookmark.timestamp_sec.asc())
+    )
+    res = await db.execute(stmt)
+    bms = res.scalars().all()
+    return [BookmarkResponse.model_validate(b) for b in bms]
+
+
+@router.post(
+    "/{meeting_id}/bookmarks",
+    response_model=BookmarkResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add a timestamped bookmark or note",
+)
+async def create_bookmark(
+    meeting: Annotated[Meeting, Depends(get_owned_meeting)],
+    data: BookmarkCreateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> BookmarkResponse:
+    bm = MeetingBookmark(
+        id=uuid.uuid4(),
+        meeting_id=meeting.id,
+        user_id=current_user.id,
+        timestamp_sec=data.timestamp_sec,
+        note=data.note,
+    )
+    db.add(bm)
+    await db.commit()
+    await db.refresh(bm)
+    return BookmarkResponse.model_validate(bm)
+
+
+@router.delete(
+    "/{meeting_id}/bookmarks/{bookmark_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a bookmark",
+)
+async def delete_bookmark(
+    meeting: Annotated[Meeting, Depends(get_owned_meeting)],
+    bookmark_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Response:
+    stmt = select(MeetingBookmark).where(
+        MeetingBookmark.id == bookmark_id, MeetingBookmark.meeting_id == meeting.id
+    )
+    res = await db.execute(stmt)
+    bm = res.scalar_one_or_none()
+    if not bm:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bookmark not found")
+    await db.delete(bm)
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/paste",
+    response_model=MeetingDetailResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create meeting from pasted raw transcript (skips audio, direct analysis)",
+)
+async def paste_transcript_meeting(
+    data: MeetingPasteRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> MeetingDetailResponse:
+    meeting_id = uuid.uuid4()
+    meeting = Meeting(
+        id=meeting_id,
+        user_id=current_user.id,
+        title=data.title,
+        title_edited=True,
+        is_pasted_transcript=True,
+        status="queued",
+        stage="analysis",
+        progress_pct=10.0,
+    )
+    db.add(meeting)
+    await db.flush()
+
+    lines = [line.strip() for line in data.transcript_text.splitlines() if line.strip()]
+    segments = []
+    current_sec = 0.0
+    for i, line in enumerate(lines):
+        duration = max(3.0, len(line.split()) * 0.4)
+        segments.append(
+            {
+                "id": i,
+                "start": current_sec,
+                "end": current_sec + duration,
+                "text": line,
+            }
+        )
+        current_sec += duration
+
+    transcript = Transcript(
+        meeting_id=meeting.id,
+        full_text=data.transcript_text,
+        segments=segments,
+        model="pasted",
+    )
+    db.add(transcript)
+    await db.commit()
+
+    from app.workers.tasks import process_meeting
+
+    process_meeting.delay(str(meeting.id))
+
+    return await get_meeting_detail(meeting.id, current_user, db)
 
 
 @router.post(
@@ -511,13 +921,13 @@ async def retry_meeting(
 
 @router.get(
     "/{meeting_id}/export",
-    summary="Export notes in Markdown or PDF format",
+    summary="Export notes in md, pdf, docx, txt, json, srt, vtt, or ics format",
 )
 async def export_meeting_notes(
     meeting_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    format: str = Query("md", pattern="^(md|pdf)$"),
+    format: str = Query("md", pattern="^(md|pdf|docx|txt|json|srt|vtt|ics)$"),
 ) -> Response:
     stmt = (
         select(Meeting)
@@ -525,6 +935,7 @@ async def export_meeting_notes(
         .options(
             selectinload(Meeting.summary),
             selectinload(Meeting.action_items),
+            selectinload(Meeting.transcript),
         )
     )
     res = await db.execute(stmt)
@@ -541,19 +952,66 @@ async def export_meeting_notes(
     safe_title = re.sub(r"[^a-zA-Z0-9_-]", "_", meeting.title).strip("_") or "meeting_notes"
 
     if format == "md":
-        content = export_markdown(meeting, meeting.summary, meeting.action_items)
+        content = export_markdown(
+            meeting, meeting.summary, meeting.action_items, meeting.transcript
+        )
         return Response(
             content=content,
             media_type="text/markdown",
             headers={"Content-Disposition": f'attachment; filename="{safe_title}.md"'},
         )
-    else:
+    elif format == "pdf":
         pdf_bytes = export_pdf(meeting, meeting.summary, meeting.action_items)
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
             headers={"Content-Disposition": f'attachment; filename="{safe_title}.pdf"'},
         )
+    elif format == "docx":
+        docx_bytes = export_docx(meeting, meeting.summary, meeting.action_items, meeting.transcript)
+        return Response(
+            content=docx_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="{safe_title}.docx"'},
+        )
+    elif format == "txt":
+        txt_content = export_txt(meeting, meeting.summary, meeting.action_items, meeting.transcript)
+        return Response(
+            content=txt_content,
+            media_type="text/plain; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{safe_title}.txt"'},
+        )
+    elif format == "json":
+        json_content = export_json(
+            meeting, meeting.summary, meeting.action_items, meeting.transcript
+        )
+        return Response(
+            content=json_content,
+            media_type="application/json; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{safe_title}.json"'},
+        )
+    elif format == "srt":
+        srt_content = export_srt(meeting.transcript)
+        return Response(
+            content=srt_content,
+            media_type="application/x-subrip; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{safe_title}.srt"'},
+        )
+    elif format == "vtt":
+        vtt_content = export_vtt(meeting.transcript)
+        return Response(
+            content=vtt_content,
+            media_type="text/vtt; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{safe_title}.vtt"'},
+        )
+    elif format == "ics":
+        ics_content = export_ics(meeting, meeting.action_items)
+        return Response(
+            content=ics_content,
+            media_type="text/calendar; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{safe_title}.ics"'},
+        )
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported format")
 
 
 @router.post(
@@ -582,6 +1040,36 @@ async def create_meeting_action_item(
     db.add(item)
     await db.commit()
     await db.refresh(item)
+
+    # Dispatch action_item.created webhook
+    try:
+        from app.db.models import Webhook
+        from app.services.webhooks import send_single_webhook_async
+
+        wh_stmt = select(Webhook).where(
+            Webhook.user_id == current_user.id,
+            Webhook.is_active.is_(True),
+        )
+        wh_res = await db.execute(wh_stmt)
+        for wh in wh_res.scalars().all():
+            if "action_item.created" in wh.events:
+                await send_single_webhook_async(
+                    wh,
+                    "action_item.created",
+                    {
+                        "event": "action_item.created",
+                        "meeting_id": str(meeting.id),
+                        "action_item_id": str(item.id),
+                        "description": item.description,
+                        "owner": item.owner,
+                        "due_date": item.due_date.isoformat() if item.due_date else None,
+                        "priority": item.priority,
+                        "status": item.status,
+                    },
+                    db,
+                )
+    except Exception:
+        pass
 
     item_dict = {
         "id": item.id,

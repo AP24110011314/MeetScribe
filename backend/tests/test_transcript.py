@@ -84,3 +84,50 @@ async def test_get_transcript_missing_404(client: AsyncClient, db_session):
     res = await client.get(f"/api/v1/meetings/{meeting.id}/transcript", headers=headers)
     assert res.status_code == 404
     assert "not found" in res.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_edit_and_revert_transcript_segments(client: AsyncClient, db_session):
+    token = await create_user_and_token(client, "tr_edit_user@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    me_res = await client.get("/api/v1/auth/me", headers=headers)
+    user_id = uuid.UUID(me_res.json()["id"])
+
+    meeting = Meeting(id=uuid.uuid4(), user_id=user_id, title="Edit Sync", status="done")
+    db_session.add(meeting)
+    await db_session.commit()
+
+    segments = [
+        {"id": 0, "start": 0.0, "end": 4.5, "text": "Original text line zero."},
+        {"id": 1, "start": 4.5, "end": 8.0, "text": "Original text line one."},
+    ]
+    transcript = Transcript(
+        meeting_id=meeting.id,
+        full_text="Original text line zero. Original text line one.",
+        segments=segments,
+        model="fake",
+    )
+    db_session.add(transcript)
+    await db_session.commit()
+
+    # 1. Edit segment 0
+    edit_res = await client.patch(
+        f"/api/v1/meetings/{meeting.id}/transcript/segment",
+        json={"segment_index": 0, "text": "Edited corrected line zero."},
+        headers=headers,
+    )
+    assert edit_res.status_code == 200
+    edit_data = edit_res.json()
+    assert edit_data["segments"][0]["text"] == "Edited corrected line zero."
+    assert "Edited corrected line zero." in edit_data["full_text"]
+
+    # 2. Revert back to original
+    revert_res = await client.post(
+        f"/api/v1/meetings/{meeting.id}/transcript/revert",
+        headers=headers,
+    )
+    assert revert_res.status_code == 200
+    revert_data = revert_res.json()
+    assert revert_data["segments"][0]["text"] == "Original text line zero."
+    assert "Original text line zero." in revert_data["full_text"]

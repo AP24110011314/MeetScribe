@@ -85,7 +85,11 @@ async def get_owned_meeting(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Meeting:
-    stmt = select(Meeting).where(Meeting.id == meeting_id, Meeting.user_id == current_user.id)
+    stmt = select(Meeting).where(
+        Meeting.id == meeting_id,
+        Meeting.user_id == current_user.id,
+        Meeting.deleted_at.is_(None),
+    )
     result = await db.execute(stmt)
     meeting = result.scalar_one_or_none()
 

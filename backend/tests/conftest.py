@@ -54,7 +54,9 @@ async def clean_database(monkeypatch, tmp_path_factory) -> AsyncGenerator[None, 
     async with test_engine.begin() as conn:
         await conn.execute(
             text(
-                "TRUNCATE TABLE users, meetings, action_items, jobs, summaries, transcripts "
+                "TRUNCATE TABLE users, meetings, action_items, jobs, summaries, transcripts, "
+                "folders, tags, meeting_tags, meeting_bookmarks, meeting_chats, "
+                "meeting_artifacts_cache, share_links, webhooks, webhook_deliveries, notifications "
                 "RESTART IDENTITY CASCADE;"
             )
         )

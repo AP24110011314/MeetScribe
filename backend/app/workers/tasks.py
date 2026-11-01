@@ -114,130 +114,148 @@ def process_meeting(self: Task, meeting_id_str: str) -> dict[str, Any]:
                     "Please configure LLM_API_KEY in .env."
                 )
 
-        # --- Stage 1: Audio Preparation (Download, Probe, Normalize, Upload) ---
-        logger.info("Meeting %s: Audio preparation stage started", meeting_id_str)
-        if not meeting.audio_key:
-            raise ValueError(f"Meeting {meeting.id} does not have an audio_key")
-
-        # Download original file
-        ext = Path(meeting.audio_key).suffix or ".mp3"
-        local_orig_path = work_dir / f"original{ext}"
-        storage.download_to(meeting.audio_key, local_orig_path)
-
-        # Check for simulated forced failure for tests (per docs/TESTING.md)
-        if (
-            (settings.TRANSCRIBER == "fake" or settings.LLM_PROVIDER == "fake")
-            and (
-                "fail" in (meeting.original_filename or "").lower()
-                or "fail" in (meeting.title or "").lower()
-                or "fail" in (meeting.audio_key or "").lower()
-            )
-            and prior_failed_jobs == 0
-        ):
-            raise RuntimeError(
-                f"Simulated forced failure for test audio: {meeting.original_filename}"
-            )
-
-        # Probe duration and metadata
-        audio_info = AudioService.probe_audio(local_orig_path)
-        duration_sec = audio_info["duration_sec"]
-
-        # Normalize to 16 kHz mono WAV
-        normalized_wav_path = work_dir / "normalized.wav"
-        AudioService.normalize(local_orig_path, normalized_wav_path)
-
-        # Upload normalized audio to storage
-        normalized_key = f"uploads/{meeting.user_id}/{meeting.id}/normalized.wav"
-        storage.upload_from(normalized_key, normalized_wav_path, content_type="audio/wav")
-
-        session.execute(
-            update(Meeting)
-            .where(Meeting.id == meeting.id)
-            .values(
-                duration_sec=duration_sec,
-                normalized_key=normalized_key,
-                progress_pct=25.0,
-                updated_at=func.now(),
-            )
-        )
-        session.commit()
-
-        # --- Stage 2: Transcription (Chunking, Transcribing, Offsets & DB Save) ---
-        logger.info("Meeting %s: Transcription stage started", meeting_id_str)
-        session.execute(
-            update(Meeting)
-            .where(Meeting.id == meeting.id)
-            .values(
-                status="transcribing",
-                stage="transcription",
-                progress_pct=30.0,
-                updated_at=func.now(),
-            )
-        )
-        session.execute(
-            update(Job).where(Job.id == job_id).values(stage="transcription", updated_at=func.now())
-        )
-        session.commit()
-
-        # Chunk audio if longer than 30 minutes (1800s)
-        chunk_dir = work_dir / "chunks"
-        chunks = AudioService.chunk_audio(normalized_wav_path, chunk_dir, chunk_duration_sec=600)
-        num_chunks = len(chunks)
-
-        transcriber = get_transcriber()
-        chunk_results = []
-
-        for idx, (chunk_path, offset_sec) in enumerate(chunks):
+        if meeting.is_pasted_transcript:
             logger.info(
-                "Transcribing chunk %d/%d (offset %.1fs): %s",
-                idx + 1,
-                num_chunks,
-                offset_sec,
-                chunk_path.name,
+                "Meeting %s: Pasted transcript detected, skipping audio & transcription",
+                meeting_id_str,
             )
-            result = transcriber.transcribe(chunk_path)
-            chunk_results.append((result, offset_sec))
+            transcript_row = session.execute(
+                select(Transcript).where(Transcript.meeting_id == meeting.id)
+            ).scalar_one()
+        else:
+            # --- Stage 1: Audio Preparation (Download, Probe, Normalize, Upload) ---
+            logger.info("Meeting %s: Audio preparation stage started", meeting_id_str)
+            if not meeting.audio_key:
+                raise ValueError(f"Meeting {meeting.id} does not have an audio_key")
 
-            # Progress increments from 30% to 70% across chunks
-            progress = round(30.0 + (40.0 * (idx + 1) / num_chunks), 1)
+            # Download original file
+            ext = Path(meeting.audio_key).suffix or ".mp3"
+            local_orig_path = work_dir / f"original{ext}"
+            storage.download_to(meeting.audio_key, local_orig_path)
+
+            # Check for simulated forced failure for tests (per docs/TESTING.md)
+            if (
+                (
+                    settings.ENV in ("test", "development")
+                    or settings.TRANSCRIBER == "fake"
+                    or settings.LLM_PROVIDER == "fake"
+                )
+                and (
+                    "fail" in (meeting.original_filename or "").lower()
+                    or "fail" in (meeting.title or "").lower()
+                    or "fail" in (meeting.audio_key or "").lower()
+                )
+                and prior_failed_jobs == 0
+            ):
+                raise RuntimeError(
+                    f"Simulated forced failure for test audio: {meeting.original_filename}"
+                )
+
+            # Probe duration and metadata
+            audio_info = AudioService.probe_audio(local_orig_path)
+            duration_sec = audio_info["duration_sec"]
+
+            # Normalize to 16 kHz mono WAV
+            normalized_wav_path = work_dir / "normalized.wav"
+            AudioService.normalize(local_orig_path, normalized_wav_path)
+
+            # Upload normalized audio to storage
+            normalized_key = f"uploads/{meeting.user_id}/{meeting.id}/normalized.wav"
+            storage.upload_from(normalized_key, normalized_wav_path, content_type="audio/wav")
+
             session.execute(
                 update(Meeting)
                 .where(Meeting.id == meeting.id)
-                .values(progress_pct=progress, updated_at=func.now())
+                .values(
+                    duration_sec=duration_sec,
+                    normalized_key=normalized_key,
+                    progress_pct=25.0,
+                    updated_at=func.now(),
+                )
             )
             session.commit()
 
-        # Merge segments across all chunks with proper time offsets
-        unified_transcript = merge_chunk_transcripts(chunk_results)
-
-        # Upsert transcript row (tsvector trigger handles full_text search indexing automatically)
-        transcript_row = session.execute(
-            select(Transcript).where(Transcript.meeting_id == meeting.id)
-        ).scalar_one_or_none()
-
-        segments_data = [s.model_dump() for s in unified_transcript.segments]
-        if not transcript_row:
-            transcript_row = Transcript(
-                meeting_id=meeting.id,
-                full_text=unified_transcript.full_text,
-                segments=segments_data,
-                model=settings.TRANSCRIBER,
+            # --- Stage 2: Transcription (Chunking, Transcribing, Offsets & DB Save) ---
+            logger.info("Meeting %s: Transcription stage started", meeting_id_str)
+            session.execute(
+                update(Meeting)
+                .where(Meeting.id == meeting.id)
+                .values(
+                    status="transcribing",
+                    stage="transcription",
+                    progress_pct=30.0,
+                    updated_at=func.now(),
+                )
             )
-            session.add(transcript_row)
-        else:
-            transcript_row.full_text = unified_transcript.full_text
-            transcript_row.segments = segments_data
-            transcript_row.model = settings.TRANSCRIBER
-
-        session.execute(
-            update(Meeting)
-            .where(Meeting.id == meeting.id)
-            .values(
-                language=unified_transcript.language,
-                updated_at=func.now(),
+            session.execute(
+                update(Job)
+                .where(Job.id == job_id)
+                .values(stage="transcription", updated_at=func.now())
             )
-        )
-        session.commit()
+            session.commit()
+
+            # Chunk audio if longer than 30 minutes (1800s)
+            chunk_dir = work_dir / "chunks"
+            chunks = AudioService.chunk_audio(
+                normalized_wav_path, chunk_dir, chunk_duration_sec=600
+            )
+            num_chunks = len(chunks)
+
+            transcriber = get_transcriber()
+            chunk_results = []
+
+            for idx, (chunk_path, offset_sec) in enumerate(chunks):
+                logger.info(
+                    "Transcribing chunk %d/%d (offset %.1fs): %s",
+                    idx + 1,
+                    num_chunks,
+                    offset_sec,
+                    chunk_path.name,
+                )
+                result = transcriber.transcribe(chunk_path)
+                chunk_results.append((result, offset_sec))
+
+                # Progress increments from 30% to 70% across chunks
+                progress = round(30.0 + (40.0 * (idx + 1) / num_chunks), 1)
+                session.execute(
+                    update(Meeting)
+                    .where(Meeting.id == meeting.id)
+                    .values(progress_pct=progress, updated_at=func.now())
+                )
+                session.commit()
+
+            # Merge segments across all chunks with proper time offsets
+            unified_transcript = merge_chunk_transcripts(chunk_results)
+
+            # Upsert transcript row (tsvector trigger handles full_text search indexing automatically)
+            existing_transcript: Transcript | None = session.execute(
+                select(Transcript).where(Transcript.meeting_id == meeting.id)
+            ).scalar_one_or_none()
+
+            segments_data = [s.model_dump() for s in unified_transcript.segments]
+            if not existing_transcript:
+                transcript_row = Transcript(
+                    meeting_id=meeting.id,
+                    full_text=unified_transcript.full_text,
+                    segments=segments_data,
+                    model=settings.TRANSCRIBER,
+                )
+                session.add(transcript_row)
+            else:
+                existing_transcript.full_text = unified_transcript.full_text
+                existing_transcript.segments = segments_data
+                existing_transcript.model = settings.TRANSCRIBER
+                transcript_row = existing_transcript
+
+            session.execute(
+                update(Meeting)
+                .where(Meeting.id == meeting.id)
+                .values(
+                    language=unified_transcript.language,
+                    updated_at=func.now(),
+                )
+            )
+            session.commit()
 
         # --- Stage 3: LLM Analysis (Summary, Decisions, Action Items, Title) ---
         logger.info("Meeting %s: Analysis stage started", meeting_id_str)
@@ -296,6 +314,43 @@ def process_meeting(self: Task, meeting_id_str: str) -> dict[str, Any]:
         )
         session.commit()
 
+        # Dispatch webhooks for meeting.completed
+        try:
+            from app.services.webhooks import dispatch_webhooks_sync
+
+            dispatch_webhooks_sync(
+                session,
+                meeting.user_id,
+                "meeting.completed",
+                {
+                    "event": "meeting.completed",
+                    "meeting_id": str(meeting.id),
+                    "title": meeting.title,
+                    "duration_sec": meeting.duration_sec,
+                    "created_at": meeting.created_at.isoformat() if meeting.created_at else None,
+                },
+            )
+        except Exception as wh_exc:
+            logger.warning("Failed to dispatch meeting.completed webhooks: %s", wh_exc)
+
+        # Create in-app completion notification
+        try:
+            from app.db.models import Notification
+
+            notif = Notification(
+                id=uuid.uuid4(),
+                user_id=meeting.user_id,
+                type="meeting_completed",
+                title=f"Meeting Ready: {meeting.title}",
+                message=f"Notes, summary, and action items are ready for '{meeting.title}'.",
+                link_url=f"/meetings/{meeting.id}",
+                is_read=False,
+            )
+            session.add(notif)
+            session.commit()
+        except Exception as n_exc:
+            logger.warning("Failed to create completion notification: %s", n_exc)
+
         logger.info("Meeting %s processed successfully", meeting_id_str)
         return {"status": "done", "meeting_id": meeting_id_str}
 
@@ -327,6 +382,42 @@ def process_meeting(self: Task, meeting_id_str: str) -> dict[str, Any]:
                 )
             )
         session.commit()
+
+        if meeting is not None:
+            # Dispatch webhooks for meeting.failed
+            try:
+                from app.services.webhooks import dispatch_webhooks_sync
+
+                dispatch_webhooks_sync(
+                    session,
+                    meeting.user_id,
+                    "meeting.failed",
+                    {
+                        "event": "meeting.failed",
+                        "meeting_id": str(meeting_uuid),
+                        "error_message": err_msg,
+                    },
+                )
+            except Exception as wh_exc:
+                logger.warning("Failed to dispatch meeting.failed webhooks: %s", wh_exc)
+
+            # Create in-app failure notification
+            try:
+                from app.db.models import Notification
+
+                notif = Notification(
+                    id=uuid.uuid4(),
+                    user_id=meeting.user_id,
+                    type="meeting_failed",
+                    title=f"Processing Failed: {meeting.title}",
+                    message=err_msg,
+                    link_url=f"/meetings/{meeting.id}",
+                    is_read=False,
+                )
+                session.add(notif)
+                session.commit()
+            except Exception as n_exc:
+                logger.warning("Failed to create failure notification: %s", n_exc)
 
         # Retry transient exceptions if retries remain
         if (

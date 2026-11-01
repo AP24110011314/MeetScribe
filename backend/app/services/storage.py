@@ -31,8 +31,10 @@ class StorageService(Protocol):
 class S3StorageService:
     def __init__(self) -> None:
         self.bucket = settings.S3_BUCKET
-        self.endpoint_url = settings.S3_ENDPOINT_URL
-        self.public_endpoint_url = settings.S3_PUBLIC_ENDPOINT_URL or settings.S3_ENDPOINT_URL
+        self.endpoint_url = settings.S3_ENDPOINT_URL or None
+        self.public_endpoint_url = (
+            settings.S3_PUBLIC_ENDPOINT_URL or settings.S3_ENDPOINT_URL or None
+        )
 
         boto_config = Config(
             signature_version="s3v4",

@@ -10,9 +10,14 @@ import {
   Moon,
   Search,
   X,
+  FileText,
+  Star,
+  Trash2,
 } from 'lucide-react';
 import { useTheme } from '@/context/ThemeContext';
 import { WindowChrome } from '@/components/ui/WindowChrome';
+import { getMeetings } from '@/api/meetings';
+import { MeetingListItem } from '@/types/meeting';
 
 interface CommandItem {
   id: string;
@@ -32,7 +37,24 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
   const { resolvedTheme, toggleTheme } = useTheme();
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [meetingResults, setMeetingResults] = useState<MeetingListItem[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isOpen || query.trim().length < 2) {
+      setMeetingResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await getMeetings({ q: query.trim(), page_size: 5 });
+        setMeetingResults(res.items);
+      } catch {
+        setMeetingResults([]);
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [query, isOpen]);
 
   const commands: CommandItem[] = [
     {
@@ -86,6 +108,26 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
       },
     },
     {
+      id: 'starred',
+      label: 'Starred Meetings',
+      category: 'Navigation',
+      icon: Star,
+      action: () => {
+        navigate('/meetings?is_starred=true');
+        onClose();
+      },
+    },
+    {
+      id: 'trash',
+      label: 'View Trash',
+      category: 'Navigation',
+      icon: Trash2,
+      action: () => {
+        navigate('/trash');
+        onClose();
+      },
+    },
+    {
       id: 'theme',
       label: `Switch to ${resolvedTheme === 'dark' ? 'Light' : 'Dark'} Mode`,
       category: 'Actions',
@@ -97,10 +139,25 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
     },
   ];
 
-  const filtered = commands.filter((c) =>
-    c.label.toLowerCase().includes(query.toLowerCase()) ||
-    c.category.toLowerCase().includes(query.toLowerCase())
-  );
+  const meetingItems: CommandItem[] = meetingResults.map((m) => ({
+    id: `meeting-${m.id}`,
+    label: m.title,
+    category: 'Meetings',
+    icon: FileText,
+    action: () => {
+      navigate(`/meetings/${m.id}`);
+      onClose();
+    },
+  }));
+
+  const filtered = [
+    ...meetingItems,
+    ...commands.filter(
+      (c) =>
+        c.label.toLowerCase().includes(query.toLowerCase()) ||
+        c.category.toLowerCase().includes(query.toLowerCase())
+    ),
+  ];
 
   useEffect(() => {
     if (isOpen) {

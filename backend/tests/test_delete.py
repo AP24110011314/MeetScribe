@@ -55,13 +55,26 @@ async def test_delete_meeting_success(client: AsyncClient, db_session, tmp_path)
     db_session.add_all([transcript, summary, action_item])
     await db_session.commit()
 
-    # Delete meeting
+    # Soft delete meeting to trash
     res = await client.delete(f"/api/v1/meetings/{meeting.id}", headers=headers)
     assert res.status_code == 204
 
-    # Check database records are gone
+    # Check meeting is marked soft-deleted
     m_check = await db_session.get(Meeting, meeting.id)
-    assert m_check is None
+    assert m_check is not None
+    assert m_check.deleted_at is not None
+
+    # Normal meeting route returns 404 once in trash
+    res_get = await client.get(f"/api/v1/meetings/{meeting.id}", headers=headers)
+    assert res_get.status_code == 404
+
+    # Permanently delete meeting from trash
+    res_perm = await client.delete(f"/api/v1/trash/{meeting.id}", headers=headers)
+    assert res_perm.status_code == 204
+
+    # Check database records are gone
+    m_check_final = await db_session.get(Meeting, meeting.id)
+    assert m_check_final is None
 
     t_check = await db_session.execute(
         select(Transcript).where(Transcript.meeting_id == meeting.id)
@@ -72,7 +85,7 @@ async def test_delete_meeting_success(client: AsyncClient, db_session, tmp_path)
     assert storage.exists(audio_key) is False
 
     # Second delete returns 404
-    res2 = await client.delete(f"/api/v1/meetings/{meeting.id}", headers=headers)
+    res2 = await client.delete(f"/api/v1/trash/{meeting.id}", headers=headers)
     assert res2.status_code == 404
 
 

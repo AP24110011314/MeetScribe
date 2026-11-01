@@ -150,3 +150,61 @@ async def test_list_meetings_user_isolation(client: AsyncClient, db_session):
     assert res2.status_code == 200
     assert res2.json()["total"] == 0
     assert len(res2.json()["items"]) == 0
+
+
+@pytest.mark.asyncio
+async def test_list_meetings_star_pin_and_folder_filtering(client: AsyncClient, db_session):
+    token = await create_user_and_token(client, "filter_user@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    me_res = await client.get("/api/v1/auth/me", headers=headers)
+    user_id = uuid.UUID(me_res.json()["id"])
+
+    # Create folder
+    folder_res = await client.post("/api/v1/folders", json={"name": "Sales"}, headers=headers)
+    folder_id = uuid.UUID(folder_res.json()["id"])
+
+    # Meeting 1: unstarred, unpinned, in folder
+    m1 = Meeting(
+        id=uuid.uuid4(),
+        user_id=user_id,
+        folder_id=folder_id,
+        title="M1 Unstarred",
+        status="done",
+    )
+    # Meeting 2: starred, pinned
+    m2 = Meeting(
+        id=uuid.uuid4(),
+        user_id=user_id,
+        title="M2 Starred and Pinned",
+        is_starred=True,
+        is_pinned=True,
+        status="done",
+    )
+    # Meeting 3: unstarred, unpinned
+    m3 = Meeting(
+        id=uuid.uuid4(),
+        user_id=user_id,
+        title="M3 Regular",
+        status="done",
+    )
+    db_session.add_all([m1, m2, m3])
+    await db_session.commit()
+
+    # 1. Pinned meeting should float first in listing
+    res_all = await client.get("/api/v1/meetings", headers=headers)
+    assert res_all.status_code == 200
+    items = res_all.json()["items"]
+    assert items[0]["id"] == str(m2.id)
+
+    # 2. Filter by is_starred=true
+    res_starred = await client.get("/api/v1/meetings?is_starred=true", headers=headers)
+    assert res_starred.status_code == 200
+    assert res_starred.json()["total"] == 1
+    assert res_starred.json()["items"][0]["id"] == str(m2.id)
+
+    # 3. Filter by folder_id
+    res_folder = await client.get(f"/api/v1/meetings?folder_id={folder_id}", headers=headers)
+    assert res_folder.status_code == 200
+    assert res_folder.json()["total"] == 1
+    assert res_folder.json()["items"][0]["id"] == str(m1.id)

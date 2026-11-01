@@ -4,6 +4,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.schemas.organization import TagResponse
+
 
 class MeetingCreateRequest(BaseModel):
     filename: str = Field(..., min_length=1, max_length=255)
@@ -49,6 +51,10 @@ class MeetingListItem(BaseModel):
     created_at: datetime
     has_transcript: bool = False
     action_items_count: int = 0
+    folder_id: Optional[uuid.UUID] = None
+    is_starred: bool = False
+    is_pinned: bool = False
+    tags: List[TagResponse] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -136,8 +142,13 @@ class MeetingDetailResponse(BaseModel):
     duration_sec: Optional[float] = None
     language: Optional[str] = None
     has_transcript: bool = False
+    folder_id: Optional[uuid.UUID] = None
+    is_starred: bool = False
+    is_pinned: bool = False
+    template: str = "general"
     created_at: datetime
     updated_at: datetime
+    tags: List[TagResponse] = Field(default_factory=list)
     summary: Optional[SummaryResponse] = None
     action_items: List[ActionItemResponse] = Field(default_factory=list)
 

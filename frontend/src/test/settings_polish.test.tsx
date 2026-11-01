@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { AuthProvider } from '@/context/AuthContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { ToastProvider, useToast } from '@/components/ui/Toast';
 import { SettingsPage } from '@/pages/SettingsPage';
@@ -30,11 +31,15 @@ describe('Settings & UI Polish (U13, U14)', () => {
 
   it('persists density and default view settings to localStorage', () => {
     render(
-      <ThemeProvider>
-        <ToastProvider>
-          <SettingsPage />
-        </ToastProvider>
-      </ThemeProvider>
+      <MemoryRouter>
+        <AuthProvider>
+          <ThemeProvider>
+            <ToastProvider>
+              <SettingsPage />
+            </ToastProvider>
+          </ThemeProvider>
+        </AuthProvider>
+      </MemoryRouter>
     );
 
     // Change density to compact

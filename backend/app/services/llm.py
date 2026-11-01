@@ -1,7 +1,7 @@
 import json
 import logging
 import re
-from typing import Any, List, Optional, Protocol, Type, TypeVar
+from typing import Any, Iterator, List, Optional, Protocol, Type, TypeVar
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -42,6 +42,18 @@ class LLMClient(Protocol):
         user: str,
         schema: Type[T],
     ) -> T: ...
+
+    def complete_text(
+        self,
+        system: str,
+        user: str,
+    ) -> str: ...
+
+    def stream_text(
+        self,
+        system: str,
+        user: str,
+    ) -> Iterator[str]: ...
 
 
 def extract_json_payload(raw_text: str) -> str:
@@ -137,6 +149,37 @@ class AnthropicClient:
             raise ValueError(
                 f"LLM JSON schema validation failed after retry: {second_err}"
             ) from second_err
+
+    def complete_text(self, system: str, user: str) -> str:
+        try:
+            import anthropic
+        except ImportError as e:
+            raise RuntimeError("anthropic package is required for AnthropicClient") from e
+
+        client = anthropic.Anthropic(api_key=self.api_key)
+        response = client.messages.create(
+            model=self.model,
+            max_tokens=4096,
+            system=system,
+            messages=[{"role": "user", "content": user}],
+        )
+        return getattr(response.content[0], "text", "")
+
+    def stream_text(self, system: str, user: str) -> Iterator[str]:
+        try:
+            import anthropic
+        except ImportError as e:
+            raise RuntimeError("anthropic package is required for AnthropicClient") from e
+
+        client = anthropic.Anthropic(api_key=self.api_key)
+        with client.messages.stream(
+            model=self.model,
+            max_tokens=4096,
+            system=system,
+            messages=[{"role": "user", "content": user}],
+        ) as stream:
+            for text in stream.text_stream:
+                yield text
 
 
 class GeminiLLMClient:
@@ -307,6 +350,45 @@ class GeminiLLMClient:
                 f"LLM JSON schema validation failed after retry: {second_err}"
             ) from second_err
 
+    def complete_text(self, system: str, user: str) -> str:
+        try:
+            from google import genai
+            from google.genai import types
+        except ImportError as e:
+            raise RuntimeError("google-genai package is required for GeminiLLMClient") from e
+
+        client = genai.Client(api_key=self.api_key)
+        config = types.GenerateContentConfig(
+            system_instruction=system,
+        )
+        response = client.models.generate_content(
+            model=self.model,
+            contents=user,
+            config=config,
+        )
+        return response.text or ""
+
+    def stream_text(self, system: str, user: str) -> Iterator[str]:
+        try:
+            from google import genai
+            from google.genai import types
+        except ImportError as e:
+            raise RuntimeError("google-genai package is required for GeminiLLMClient") from e
+
+        client = genai.Client(api_key=self.api_key)
+        config = types.GenerateContentConfig(
+            system_instruction=system,
+        )
+        response_stream = client.models.generate_content_stream(
+            model=self.model,
+            contents=user,
+            config=config,
+        )
+        for chunk in response_stream:
+            text = chunk.text or ""
+            if text:
+                yield text
+
 
 class FakeLLMClient:
     """
@@ -325,6 +407,70 @@ class FakeLLMClient:
     ) -> T:
         if self.should_fail_validation or "SIMULATE_VALIDATION_ERROR" in user:
             raise ValueError("Simulated validation error after retry")
+
+        schema_name = getattr(schema, "__name__", str(schema))
+        if "Chapter" in schema_name:
+            return schema.model_validate(
+                {
+                    "chapters": [
+                        {
+                            "title": "Introduction & Agenda",
+                            "start_sec": 0.0,
+                            "end_sec": 60.0,
+                            "summary": "Kickoff and overview.",
+                        },
+                        {
+                            "title": "Beta Launch Discussion",
+                            "start_sec": 60.0,
+                            "end_sec": 180.0,
+                            "summary": "Review of release milestones.",
+                        },
+                    ]
+                }
+            )
+
+        if "Email" in schema_name:
+            return schema.model_validate(
+                {
+                    "subject": "Follow-up: Weekly Team Sync",
+                    "recipient_suggestion": "Team Members",
+                    "body": "Hi everyone,\n\nThanks for meeting today. We confirmed our beta release date for November 15th.\n\nBest,\nTeam Lead",
+                }
+            )
+
+        if "Translated" in schema_name:
+            return schema.model_validate(
+                {
+                    "language": "Spanish",
+                    "title": "Sincronización Semanal del Equipo",
+                    "summary": "El equipo se reunió para coordinar hitos de la versión beta.",
+                    "key_points": ["Lanzamiento beta confirmado para el 15 de noviembre."],
+                    "decisions": ["Enviar la versión beta el 15 de noviembre."],
+                    "action_items": [
+                        {
+                            "description": "Actualizar la documentación de la API",
+                            "owner": "Priya",
+                            "due_date": "2026-11-06",
+                            "priority": "high",
+                            "source_start_sec": 6.56,
+                        }
+                    ],
+                }
+            )
+
+        if "Insight" in schema_name:
+            return schema.model_validate(
+                {
+                    "sentiment": "positive",
+                    "pace_wpm": 145,
+                    "top_keywords": ["beta release", "API documentation", "deadline", "PostgreSQL"],
+                    "unanswered_questions": ["What is the fallback plan if testing is delayed?"],
+                    "speaker_distribution": [
+                        {"speaker": "Speaker 1", "talk_time_pct": 60.0},
+                        {"speaker": "Speaker 2", "talk_time_pct": 40.0},
+                    ],
+                }
+            )
 
         # Map phase handling
         if schema == SectionAnalysis:
@@ -447,6 +593,17 @@ class FakeLLMClient:
                 "action_items": [item.model_dump() for item in action_items],
             }
         )
+
+    def complete_text(self, system: str, user: str) -> str:
+        if "email" in system.lower() or "email" in user.lower():
+            return "Subject: Follow-up on Team Sync\n\nHi everyone,\n\nThanks for meeting today. We confirmed our beta release date for November 15th.\n\nBest,\nTeam Lead"
+        return "Based on the meeting transcript, the project beta release is confirmed for November 15th [[05:12]]."
+
+    def stream_text(self, system: str, user: str) -> Iterator[str]:
+        full_text = self.complete_text(system, user)
+        words = full_text.split(" ")
+        for i, word in enumerate(words):
+            yield word + (" " if i < len(words) - 1 else "")
 
 
 def get_llm_client() -> LLMClient:

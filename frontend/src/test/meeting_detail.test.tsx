@@ -47,6 +47,9 @@ describe('Meeting Detail (U08, U09, U10)', () => {
     duration_sec: 1200,
     language: 'en',
     has_transcript: true,
+    is_starred: false,
+    is_pinned: false,
+    template: 'general',
     created_at: '2026-10-29T10:00:00Z',
     updated_at: '2026-10-29T10:00:00Z',
     summary: {

@@ -53,15 +53,22 @@ function onRefreshed(token: string) {
   refreshSubscribers = [];
 }
 
+const API_BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+
+export function getApiUrl(path: string): string {
+  if (path.startsWith('http')) return path;
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  if (normalizedPath.startsWith('/api')) {
+    return API_BASE_URL ? `${API_BASE_URL}${normalizedPath}` : normalizedPath;
+  }
+  return API_BASE_URL ? `${API_BASE_URL}/api/v1${normalizedPath}` : `/api/v1${normalizedPath}`;
+}
+
 export async function apiFetch<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const url = endpoint.startsWith('http')
-    ? endpoint
-    : endpoint.startsWith('/api')
-    ? endpoint
-    : `/api/v1${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  const url = getApiUrl(endpoint);
 
   const headers = new Headers(options.headers || {});
   const token = getAccessToken();
@@ -80,7 +87,7 @@ export async function apiFetch<T>(
       isRefreshing = true;
       try {
         const refreshToken = getRefreshToken();
-        const refreshRes = await fetch('/api/v1/auth/refresh', {
+        const refreshRes = await fetch(getApiUrl('/api/v1/auth/refresh'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ refresh_token: refreshToken }),

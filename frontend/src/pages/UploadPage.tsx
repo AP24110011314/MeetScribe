@@ -1,13 +1,30 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UploadCloud, FileAudio, CheckCircle2, AlertCircle, RefreshCw, ArrowRight, X, Sparkles } from 'lucide-react';
+import {
+  UploadCloud,
+  FileAudio,
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
+  ArrowRight,
+  X,
+  Sparkles,
+  Mic,
+  MicOff,
+  Square,
+  Play,
+  Pause,
+  FileText,
+  RotateCcw,
+} from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Badge } from '@/components/ui/Badge';
 import { WindowChrome } from '@/components/ui/WindowChrome';
 import { useToast } from '@/components/ui/Toast';
-import { getMeetingStatus, retryMeeting, uploadAudioFile } from '@/api/meetings';
+import { getMeetingStatus, retryMeeting, uploadAudioFile, pasteTranscriptMeeting } from '@/api/meetings';
 import { MeetingStatusData } from '@/types/meeting';
 import { cn } from '@/lib/utils';
 
@@ -33,6 +50,196 @@ export function UploadPage() {
   const [activeItem, setActiveItem] = useState<QueueItem | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Tab mode: file | record | paste
+  const [uploadMode, setUploadMode] = useState<'file' | 'record' | 'paste'>('file');
+
+  // Audio Recorder State
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const [audioLevel, setAudioLevel] = useState(0);
+  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
+  const [micError, setMicError] = useState<string | null>(null);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
+  // Paste Transcript State
+  const [pasteTitle, setPasteTitle] = useState('');
+  const [pasteTranscript, setPasteTranscript] = useState('');
+  const [isPasting, setIsPasting] = useState(false);
+
+  // Clean up audio recorder on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach((t) => t.stop());
+      }
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close().catch(() => {});
+      }
+    };
+  }, []);
+
+  const startRecording = async () => {
+    setMicError(null);
+    setRecordedBlob(null);
+    setRecordSeconds(0);
+    audioChunksRef.current = [];
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setMicError('Your browser does not support audio recording via MediaRecorder.');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioStreamRef.current = stream;
+
+      // Setup audio analyzer for live level meter
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const audioCtx = new AudioCtx();
+      audioContextRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      source.connect(analyser);
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      const updateLevel = () => {
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          sum += dataArray[i];
+        }
+        const avg = sum / bufferLength;
+        setAudioLevel(Math.min(100, Math.round((avg / 128) * 100)));
+        animationFrameRef.current = requestAnimationFrame(updateLevel);
+      };
+      updateLevel();
+
+      const options = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? { mimeType: 'audio/webm;codecs=opus' }
+        : undefined;
+
+      const mediaRecorder = new MediaRecorder(stream, options);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const mime = mediaRecorder.mimeType || 'audio/webm';
+        const blob = new Blob(audioChunksRef.current, { type: mime });
+        setRecordedBlob(blob);
+      };
+
+      mediaRecorder.start(500);
+      setIsRecording(true);
+      setIsPaused(false);
+
+      timerRef.current = setInterval(() => {
+        setRecordSeconds((prev) => prev + 1);
+      }, 1000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Microphone permission denied';
+      setMicError(`Unable to access microphone: ${msg}. Please allow permissions in your browser.`);
+    }
+  };
+
+  const pauseRecording = () => {
+    if (mediaRecorderRef.current && isRecording && !isPaused) {
+      mediaRecorderRef.current.pause();
+      setIsPaused(true);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  };
+
+  const resumeRecording = () => {
+    if (mediaRecorderRef.current && isRecording && isPaused) {
+      mediaRecorderRef.current.resume();
+      setIsPaused(false);
+      timerRef.current = setInterval(() => {
+        setRecordSeconds((prev) => prev + 1);
+      }, 1000);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      setIsPaused(false);
+
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (audioStreamRef.current) {
+        audioStreamRef.current.getTracks().forEach((t) => t.stop());
+      }
+      setAudioLevel(0);
+    }
+  };
+
+  const discardRecording = () => {
+    stopRecording();
+    setRecordedBlob(null);
+    setRecordSeconds(0);
+    setMicError(null);
+  };
+
+  const useRecordingForPipeline = () => {
+    if (!recordedBlob) return;
+    const file = new File(
+      [recordedBlob],
+      `in-browser-recording-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.webm`,
+      { type: recordedBlob.type || 'audio/webm' }
+    );
+    setUploadMode('file');
+    handleFiles([file]);
+  };
+
+  const handlePasteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pasteTitle.trim()) {
+      toast({ type: 'error', title: 'Title required', description: 'Please provide a title for the meeting.' });
+      return;
+    }
+    if (!pasteTranscript.trim()) {
+      toast({ type: 'error', title: 'Transcript required', description: 'Please paste transcript text.' });
+      return;
+    }
+
+    setIsPasting(true);
+    try {
+      const created = await pasteTranscriptMeeting({
+        title: pasteTitle.trim(),
+        transcript_text: pasteTranscript.trim(),
+      });
+      toast({
+        type: 'success',
+        title: 'Meeting Created!',
+        description: 'Analyzing transcript with AI pipeline...',
+      });
+      navigate(`/meetings/${created.id}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to create meeting from transcript';
+      toast({ type: 'error', title: 'Error', description: msg });
+    } finally {
+      setIsPasting(false);
+    }
+  };
+
   // Poll status for active processing item every 2.5s
   useEffect(() => {
     if (!activeItem?.meetingId || activeItem.status !== 'processing') return;
@@ -49,6 +256,16 @@ export function UploadPage() {
             title: 'Meeting Ready!',
             description: 'Transcription and analysis complete.',
           });
+          if ('Notification' in window && Notification.permission === 'granted') {
+            try {
+              new Notification('MeetScribe', {
+                body: 'Meeting transcription and analysis complete.',
+                icon: '/vite.svg',
+              });
+            } catch {
+              // ignore
+            }
+          }
         } else if (data.status === 'failed') {
           setActiveItem((prev) => (prev ? { ...prev, status: 'failed', error: data.error_message || 'Processing failed' } : null));
           toast({
@@ -197,56 +414,285 @@ export function UploadPage() {
         </p>
       </div>
 
-      {/* Large macOS Glass Dropzone with Animated Border */}
-      <motion.div
-        data-testid="upload-dropzone"
-        whileHover={{ scale: 1.01 }}
-        whileTap={{ scale: 0.99 }}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragging(true);
-        }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
-        className={cn(
-          'relative flex flex-col items-center justify-center p-10 sm:p-14 border-2 border-dashed rounded-3xl cursor-pointer transition-all duration-200 glass-card text-center',
-          isDragging
-            ? 'border-primary ring-4 ring-primary/25 bg-primary/10 shadow-2xl scale-[1.01]'
-            : 'border-white/20 hover:border-primary/60 hover:shadow-xl'
-        )}
-      >
-        <input
-          ref={fileInputRef}
-          data-testid="upload-file-input"
-          type="file"
-          accept=".mp3,.wav,.m4a,.mp4,.webm,.ogg,audio/*,video/*"
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) handleFiles(e.target.files);
-          }}
-        />
+      {/* Mode switcher tabs */}
+      <div className="flex items-center gap-2 p-1.5 rounded-2xl glass-card-subtle border border-white/10 max-w-md">
+        <button
+          type="button"
+          data-testid="tab-upload-file"
+          onClick={() => setUploadMode('file')}
+          className={cn(
+            'flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold transition-all',
+            uploadMode === 'file'
+              ? 'bg-primary text-primary-foreground shadow-md'
+              : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+          )}
+        >
+          <UploadCloud className="h-4 w-4" />
+          <span>Upload File</span>
+        </button>
 
-        {/* Central Glowing Icon / Progress Ring Container */}
-        <div className="relative mb-5">
-          <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-primary/15 text-primary border border-primary/25 shadow-lg group-hover:scale-105 transition-transform">
-            <UploadCloud className="h-10 w-10 drop-shadow-sm" />
+        <button
+          type="button"
+          data-testid="tab-record-browser"
+          onClick={() => setUploadMode('record')}
+          className={cn(
+            'flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold transition-all',
+            uploadMode === 'record'
+              ? 'bg-primary text-primary-foreground shadow-md'
+              : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+          )}
+        >
+          <Mic className="h-4 w-4" />
+          <span>Record Audio</span>
+        </button>
+
+        <button
+          type="button"
+          data-testid="tab-paste-transcript"
+          onClick={() => setUploadMode('paste')}
+          className={cn(
+            'flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-semibold transition-all',
+            uploadMode === 'paste'
+              ? 'bg-primary text-primary-foreground shadow-md'
+              : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
+          )}
+        >
+          <FileText className="h-4 w-4" />
+          <span>Paste Notes</span>
+        </button>
+      </div>
+
+      {/* Mode 1: File Dropzone */}
+      {uploadMode === 'file' && (
+        <motion.div
+          data-testid="upload-dropzone"
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.99 }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
+          className={cn(
+            'relative flex flex-col items-center justify-center p-10 sm:p-14 border-2 border-dashed rounded-3xl cursor-pointer transition-all duration-200 glass-card text-center',
+            isDragging
+              ? 'border-primary ring-4 ring-primary/25 bg-primary/10 shadow-2xl scale-[1.01]'
+              : 'border-white/20 hover:border-primary/60 hover:shadow-xl'
+          )}
+        >
+          <input
+            ref={fileInputRef}
+            data-testid="upload-file-input"
+            type="file"
+            accept=".mp3,.wav,.m4a,.mp4,.webm,.ogg,audio/*,video/*"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files) handleFiles(e.target.files);
+            }}
+          />
+
+          {/* Central Glowing Icon / Progress Ring Container */}
+          <div className="relative mb-5">
+            <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-primary/15 text-primary border border-primary/25 shadow-lg group-hover:scale-105 transition-transform">
+              <UploadCloud className="h-10 w-10 drop-shadow-sm" />
+            </div>
+          </div>
+
+          <h3 className="text-xl font-bold text-foreground">Click to upload or drag & drop</h3>
+          <p className="text-sm text-muted-foreground mt-1.5 max-w-md">
+            Direct presigned transfer for MP3, WAV, M4A, MP4, WebM, or OGG up to {MAX_UPLOAD_MB} MB.
+          </p>
+          <div className="mt-4 flex items-center gap-2">
+            <span className="text-[11px] font-medium px-3 py-1 rounded-full glass-card-subtle text-muted-foreground border border-white/10">
+              Audio & Video Supported
+            </span>
+            <span className="text-[11px] font-medium px-3 py-1 rounded-full glass-card-subtle text-muted-foreground border border-white/10">
+              16 kHz Mono Normalization
+            </span>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Mode 2: In-Browser Audio Recorder */}
+      {uploadMode === 'record' && (
+        <div className="glass-card rounded-3xl border border-white/20 p-8 sm:p-12 shadow-2xl backdrop-blur-2xl text-center space-y-6">
+          <div className="max-w-md mx-auto space-y-2">
+            <h2 className="text-2xl font-bold">In-Browser Recorder</h2>
+            <p className="text-sm text-muted-foreground">
+              Record a meeting or voice memo straight from your microphone without installing extra software.
+            </p>
+          </div>
+
+          {micError && (
+            <div className="p-4 rounded-2xl bg-destructive/15 border border-destructive/25 text-destructive text-sm flex items-center gap-3 text-left max-w-lg mx-auto">
+              <MicOff className="h-5 w-5 shrink-0" />
+              <span>{micError}</span>
+            </div>
+          )}
+
+          {/* Timer & Pulsing Live Level Meter */}
+          <div className="py-6 flex flex-col items-center justify-center space-y-4">
+            <div className="font-mono text-4xl sm:text-5xl font-extrabold tracking-tight tabular-nums text-foreground">
+              {Math.floor(recordSeconds / 60).toString().padStart(2, '0')}:
+              {(recordSeconds % 60).toString().padStart(2, '0')}
+            </div>
+
+            {/* Live Audio Level Visualizer */}
+            {isRecording && !isPaused && (
+              <div className="flex items-center gap-1.5 h-12">
+                {[...Array(12)].map((_, i) => {
+                  const factor = Math.sin((i / 12) * Math.PI) * (audioLevel / 100);
+                  const height = Math.max(8, Math.min(48, Math.round(factor * 48)));
+                  return (
+                    <motion.div
+                      key={i}
+                      className="w-2 rounded-full bg-primary"
+                      animate={{ height }}
+                      transition={{ duration: 0.1 }}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Controls */}
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            {!isRecording && !recordedBlob && (
+              <Button
+                size="lg"
+                onClick={startRecording}
+                className="gap-2.5 rounded-2xl px-6 py-6 min-h-[48px] shadow-lg shadow-primary/25"
+              >
+                <Mic className="h-5 w-5" />
+                <span>Start Recording</span>
+              </Button>
+            )}
+
+            {isRecording && (
+              <>
+                {isPaused ? (
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={resumeRecording}
+                    className="gap-2 rounded-2xl min-h-[48px]"
+                  >
+                    <Play className="h-5 w-5" />
+                    <span>Resume</span>
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={pauseRecording}
+                    className="gap-2 rounded-2xl min-h-[48px]"
+                  >
+                    <Pause className="h-5 w-5" />
+                    <span>Pause</span>
+                  </Button>
+                )}
+
+                <Button
+                  variant="destructive"
+                  size="lg"
+                  onClick={stopRecording}
+                  className="gap-2 rounded-2xl min-h-[48px]"
+                >
+                  <Square className="h-5 w-5" />
+                  <span>Stop Recording</span>
+                </Button>
+              </>
+            )}
+
+            {recordedBlob && (
+              <>
+                <Button
+                  size="lg"
+                  onClick={useRecordingForPipeline}
+                  className="gap-2 rounded-2xl min-h-[48px] shadow-lg shadow-primary/25"
+                >
+                  <Sparkles className="h-5 w-5" />
+                  <span>Transcribe This Recording</span>
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  onClick={discardRecording}
+                  className="gap-2 rounded-2xl min-h-[48px]"
+                >
+                  <RotateCcw className="h-5 w-5" />
+                  <span>Discard & Re-record</span>
+                </Button>
+              </>
+            )}
           </div>
         </div>
+      )}
 
-        <h3 className="text-xl font-bold text-foreground">Click to upload or drag & drop</h3>
-        <p className="text-sm text-muted-foreground mt-1.5 max-w-md">
-          Direct presigned transfer for MP3, WAV, M4A, MP4, WebM, or OGG up to {MAX_UPLOAD_MB} MB.
-        </p>
-        <div className="mt-4 flex items-center gap-2">
-          <span className="text-[11px] font-medium px-3 py-1 rounded-full glass-card-subtle text-muted-foreground border border-white/10">
-            Audio & Video Supported
-          </span>
-          <span className="text-[11px] font-medium px-3 py-1 rounded-full glass-card-subtle text-muted-foreground border border-white/10">
-            16 kHz Mono Normalization
-          </span>
+      {/* Mode 3: Paste Transcript */}
+      {uploadMode === 'paste' && (
+        <div className="glass-card rounded-3xl border border-white/20 p-6 sm:p-10 shadow-2xl backdrop-blur-2xl space-y-6">
+          <div className="space-y-1">
+            <h2 className="text-2xl font-bold">Paste Transcript</h2>
+            <p className="text-sm text-muted-foreground">
+              Have existing text notes or a transcript from Zoom, Teams, or Otter? Run it through our AI synthesis pipeline directly.
+            </p>
+          </div>
+
+          <form onSubmit={handlePasteSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Meeting Title
+              </label>
+              <Input
+                placeholder="e.g. Q3 Roadmap Review"
+                value={pasteTitle}
+                onChange={(e) => setPasteTitle(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Transcript / Meeting Notes
+              </label>
+              <textarea
+                placeholder="Paste the full conversation text, speaker dialog, or raw notes here..."
+                value={pasteTranscript}
+                onChange={(e) => setPasteTranscript(e.target.value)}
+                rows={10}
+                required
+                className="w-full p-4 rounded-2xl border border-white/20 bg-background/60 backdrop-blur-md text-sm text-foreground focus:ring-2 focus:ring-primary outline-none transition-all resize-y"
+              />
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button
+                type="submit"
+                size="lg"
+                disabled={isPasting}
+                className="gap-2 rounded-2xl px-6 py-6 min-h-[48px] shadow-lg shadow-primary/25"
+              >
+                {isPasting ? (
+                  <>
+                    <RefreshCw className="h-5 w-5 animate-spin" />
+                    <span>Processing Notes...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-5 w-5" />
+                    <span>Generate AI Notes</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
         </div>
-      </motion.div>
+      )}
 
       {/* Active Processing Step Tracker */}
       {activeItem && (

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ToastProvider } from '@/components/ui/Toast';
 import { MeetingsPage } from '@/pages/MeetingsPage';
 
@@ -9,17 +10,27 @@ vi.mock('@/api/meetings', () => ({
   renameMeeting: vi.fn(),
   deleteMeeting: vi.fn(),
   exportMeetingNotes: vi.fn(),
+  getTags: vi.fn().mockResolvedValue([]),
+  getFolders: vi.fn().mockResolvedValue({ items: [] }),
+  organizeMeeting: vi.fn(),
+  bulkMeetings: vi.fn(),
 }));
 
 import * as meetingsApi from '@/api/meetings';
 
 function renderMeetingsPage() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+
   return render(
-    <ToastProvider>
-      <MemoryRouter>
-        <MeetingsPage />
-      </MemoryRouter>
-    </ToastProvider>
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>
+        <MemoryRouter>
+          <MeetingsPage />
+        </MemoryRouter>
+      </ToastProvider>
+    </QueryClientProvider>
   );
 }
 
@@ -40,6 +51,8 @@ describe('Meetings List (U07)', () => {
           created_at: '2026-10-29T10:00:00Z',
           has_transcript: true,
           action_items_count: 3,
+          is_starred: false,
+          is_pinned: false,
         },
       ],
       total: 1,
@@ -68,6 +81,8 @@ describe('Meetings List (U07)', () => {
           created_at: '2026-10-29T10:00:00Z',
           has_transcript: true,
           action_items_count: 3,
+          is_starred: false,
+          is_pinned: false,
         },
       ],
       total: 1,
@@ -121,6 +136,8 @@ describe('Meetings List (U07)', () => {
           created_at: '2026-10-29T10:00:00Z',
           has_transcript: true,
           action_items_count: 0,
+          is_starred: false,
+          is_pinned: false,
         },
       ],
       total: 1,

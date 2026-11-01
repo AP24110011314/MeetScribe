@@ -1,30 +1,44 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { AuthProvider } from '@/context/AuthContext';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AppShell } from '@/components/layout/AppShell';
 
+vi.mock('@/api/meetings', () => ({
+  getFolders: vi.fn().mockResolvedValue({ items: [] }),
+  createFolder: vi.fn(),
+  updateFolder: vi.fn(),
+  deleteFolder: vi.fn(),
+}));
+
 function renderAppShell(initialRoute = '/dashboard') {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+
   return render(
-    <ThemeProvider>
-      <AuthProvider>
-        <ToastProvider>
-          <MemoryRouter initialEntries={[initialRoute]}>
-            <Routes>
-              <Route path="/" element={<AppShell />}>
-                <Route path="dashboard" element={<div>Dashboard Content</div>} />
-                <Route path="meetings" element={<div>Meetings Content</div>} />
-                <Route path="action-items" element={<div>Action Items Content</div>} />
-                <Route path="settings" element={<div>Settings Content</div>} />
-                <Route path="upload" element={<div>Upload Content</div>} />
-              </Route>
-            </Routes>
-          </MemoryRouter>
-        </ToastProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <MemoryRouter initialEntries={[initialRoute]}>
+              <Routes>
+                <Route path="/" element={<AppShell />}>
+                  <Route path="dashboard" element={<div>Dashboard Content</div>} />
+                  <Route path="meetings" element={<div>Meetings Content</div>} />
+                  <Route path="action-items" element={<div>Action Items Content</div>} />
+                  <Route path="settings" element={<div>Settings Content</div>} />
+                  <Route path="upload" element={<div>Upload Content</div>} />
+                </Route>
+              </Routes>
+            </MemoryRouter>
+          </ToastProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }
 

@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import List, Union
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -58,6 +58,37 @@ class Settings(BaseSettings):
     @property
     def effective_llm_api_key(self) -> str:
         return self.LLM_API_KEY or self.GEMINI_API_KEY
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def normalize_database_url(cls, v: str) -> str:
+        if isinstance(v, str):
+            if v.startswith("postgres://"):
+                return v.replace("postgres://", "postgresql+asyncpg://", 1)
+            if v.startswith("postgresql://") and not v.startswith("postgresql+"):
+                return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
+
+    @field_validator("DATABASE_URL_SYNC", mode="before")
+    @classmethod
+    def normalize_database_url_sync(cls, v: str) -> str:
+        if isinstance(v, str):
+            if v.startswith("postgres://"):
+                return v.replace("postgres://", "postgresql+psycopg://", 1)
+            if v.startswith("postgresql://") and not v.startswith("postgresql+"):
+                return v.replace("postgresql://", "postgresql+psycopg://", 1)
+            if v.startswith("postgresql+asyncpg://"):
+                return v.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+        return v
+
+    @model_validator(mode="after")
+    def sync_database_urls(self) -> "Settings":
+        if self.DATABASE_URL and ("localhost" not in self.DATABASE_URL):
+            if "localhost" in self.DATABASE_URL_SYNC:
+                self.DATABASE_URL_SYNC = self.DATABASE_URL.replace(
+                    "postgresql+asyncpg://", "postgresql+psycopg://"
+                )
+        return self
 
     @field_validator("API_PORT")
     @classmethod

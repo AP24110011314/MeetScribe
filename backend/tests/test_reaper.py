@@ -161,3 +161,50 @@ async def test_reaper_ignores_recent_or_finished_meetings(db_session):
 
     res_done = await db_session.execute(select(Meeting).where(Meeting.id == m_done.id))
     assert res_done.scalar_one().status == "done"
+
+
+@pytest.mark.asyncio
+async def test_check_action_item_due_dates_creates_notifications(db_session):
+    from datetime import date
+
+    from app.db.models import ActionItem, Notification
+    from app.workers.reaper import check_action_item_due_dates
+
+    user = User(
+        id=uuid.uuid4(),
+        email="reaper_due@example.com",
+        password_hash="argon2id$hashed",
+    )
+    meeting = Meeting(
+        id=uuid.uuid4(),
+        user_id=user.id,
+        title="Due Dates Meeting",
+        status="done",
+    )
+    db_session.add_all([user, meeting])
+    await db_session.flush()
+
+    # Action item due today
+    item = ActionItem(
+        id=uuid.uuid4(),
+        meeting_id=meeting.id,
+        user_id=user.id,
+        description="Submit financial report",
+        due_date=date.today(),
+        priority="high",
+        status="todo",
+    )
+    db_session.add(item)
+    await db_session.commit()
+
+    result = check_action_item_due_dates()
+    assert result["notified"] >= 1
+
+    # Verify Notification row was created
+    stmt = select(Notification).where(
+        Notification.user_id == user.id,
+        Notification.type == "action_item_due",
+    )
+    notifs = (await db_session.execute(stmt)).scalars().all()
+    assert len(notifs) >= 1
+    assert "Submit financial report" in notifs[0].title

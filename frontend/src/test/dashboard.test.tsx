@@ -76,6 +76,8 @@ describe('Dashboard Page (U04)', () => {
           created_at: '2026-10-29T10:00:00Z',
           has_transcript: true,
           action_items_count: 2,
+          is_starred: false,
+          is_pinned: false,
         },
         {
           id: 'm2',
@@ -85,6 +87,8 @@ describe('Dashboard Page (U04)', () => {
           created_at: '2026-10-29T12:00:00Z',
           has_transcript: true,
           action_items_count: 1,
+          is_starred: false,
+          is_pinned: false,
         },
       ],
       total: 2,
