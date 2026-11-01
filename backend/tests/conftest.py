@@ -38,6 +38,9 @@ async def clean_database(monkeypatch, tmp_path_factory) -> AsyncGenerator[None, 
     # Route sync DB calls in workers/reaper to test database
     monkeypatch.setattr("app.db.session.SyncSessionLocal", TestSyncSessionLocal)
 
+    # Set ENV to test
+    monkeypatch.setattr(settings, "ENV", "test")
+
     # Use fake transcriber and LLM in test suite to avoid downloading Whisper models or calling real APIs
     monkeypatch.setattr(settings, "TRANSCRIBER", "fake")
     monkeypatch.setattr(settings, "LLM_PROVIDER", "fake")

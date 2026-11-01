@@ -94,6 +94,26 @@ def process_meeting(self: Task, meeting_id_str: str) -> dict[str, Any]:
         work_dir = Path(tempfile.mkdtemp(prefix=f"meeting_{meeting.id}_"))
         storage = get_storage_service()
 
+        # Validate runtime provider configuration (fail loudly outside test)
+        if settings.ENV != "test":
+            if settings.TRANSCRIBER == "fake":
+                raise ValueError(
+                    "Invalid configuration: TRANSCRIBER cannot be 'fake' outside ENV=test."
+                )
+            if settings.LLM_PROVIDER == "fake":
+                raise ValueError(
+                    "Invalid configuration: LLM_PROVIDER cannot be 'fake' outside ENV=test. "
+                    "Please set LLM_PROVIDER=gemini and configure LLM_API_KEY in .env."
+                )
+            if (
+                settings.LLM_PROVIDER in ("gemini", "anthropic")
+                and not settings.effective_llm_api_key
+            ):
+                raise ValueError(
+                    f"Missing API key for LLM_PROVIDER={settings.LLM_PROVIDER}. "
+                    "Please configure LLM_API_KEY in .env."
+                )
+
         # --- Stage 1: Audio Preparation (Download, Probe, Normalize, Upload) ---
         logger.info("Meeting %s: Audio preparation stage started", meeting_id_str)
         if not meeting.audio_key:

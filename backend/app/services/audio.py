@@ -43,13 +43,11 @@ class AudioService:
             (s for s in info.get("streams", []) if s.get("codec_type") == "audio"),
             None,
         )
+        if not audio_stream:
+            raise ValueError(f"No audio stream found in file: {path.name}")
 
         format_info = info.get("format", {})
-        duration_str = (
-            audio_stream.get("duration")
-            if audio_stream and audio_stream.get("duration")
-            else format_info.get("duration")
-        )
+        duration_str = audio_stream.get("duration") or format_info.get("duration")
 
         if not duration_str:
             raise ValueError("Could not determine audio duration")
@@ -90,6 +88,7 @@ class AudioService:
             "-y",
             "-i",
             str(input_path),
+            "-vn",
             "-ar",
             "16000",
             "-ac",
