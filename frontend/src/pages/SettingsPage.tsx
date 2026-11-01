@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/Card';
-import { useTheme } from '@/context/ThemeContext';
+import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher';
 import { useToast } from '@/components/ui/Toast';
-import { Sun, Moon, Laptop, LayoutGrid, List } from 'lucide-react';
+import { Sparkles, Sliders, Keyboard } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export function SettingsPage() {
-  const { theme, setTheme } = useTheme();
   const { toast } = useToast();
 
   const [density, setDensityState] = useState<'comfortable' | 'compact'>(() => {
@@ -41,147 +41,124 @@ export function SettingsPage() {
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold glass-card-subtle text-primary border border-primary/20 mb-2">
+          <Sparkles className="w-3.5 h-3.5" />
+          <span>System & Workspace Preferences</span>
+        </div>
+        <h1 className="text-3xl font-extrabold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Customize your workspace appearance, density, and preferred views.
+          Customize your appearance palette, layout density, and default workspace views.
         </p>
       </div>
 
-      {/* Theme Setting */}
-      <Card>
+      {/* Theme & Palette Setting Card */}
+      <Card className="rounded-3xl border border-white/15 shadow-xl overflow-hidden">
         <CardHeader>
-          <CardTitle>Appearance Theme</CardTitle>
-          <CardDescription>Select your interface theme</CardDescription>
+          <CardTitle className="text-xl">macOS Glass Themes</CardTitle>
+          <CardDescription>Select your appearance mode and accent color palette</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <button
-              onClick={() => setTheme('light')}
-              className={`flex items-center gap-3 p-4 rounded-xl border transition-all text-left ${
-                theme === 'light'
-                  ? 'border-primary bg-primary/10 text-primary font-semibold'
-                  : 'border-border hover:bg-muted text-foreground'
-              }`}
-            >
-              <Sun className="h-5 w-5 shrink-0" />
-              <div>
-                <p className="text-sm">Light Mode</p>
-                <p className="text-xs text-muted-foreground font-normal">Clean bright interface</p>
-              </div>
-            </button>
-
-            <button
-              onClick={() => setTheme('dark')}
-              className={`flex items-center gap-3 p-4 rounded-xl border transition-all text-left ${
-                theme === 'dark'
-                  ? 'border-primary bg-primary/10 text-primary font-semibold'
-                  : 'border-border hover:bg-muted text-foreground'
-              }`}
-            >
-              <Moon className="h-5 w-5 shrink-0" />
-              <div>
-                <p className="text-sm">Dark Mode</p>
-                <p className="text-xs text-muted-foreground font-normal">High contrast dark palette</p>
-              </div>
-            </button>
-
-            <button
-              onClick={() => setTheme('system')}
-              className={`flex items-center gap-3 p-4 rounded-xl border transition-all text-left ${
-                theme === 'system'
-                  ? 'border-primary bg-primary/10 text-primary font-semibold'
-                  : 'border-border hover:bg-muted text-foreground'
-              }`}
-            >
-              <Laptop className="h-5 w-5 shrink-0" />
-              <div>
-                <p className="text-sm">System</p>
-                <p className="text-xs text-muted-foreground font-normal">Matches macOS appearance</p>
-              </div>
-            </button>
-          </div>
+          <ThemeSwitcher variant="full" />
         </CardContent>
       </Card>
 
-      {/* Display Preferences */}
-      <Card>
+      {/* Display & Density Preferences */}
+      <Card className="rounded-3xl border border-white/15 shadow-xl overflow-hidden">
         <CardHeader>
-          <CardTitle>Display & Density</CardTitle>
-          <CardDescription>Adjust how information is laid out</CardDescription>
+          <CardTitle className="text-xl flex items-center gap-2">
+            <Sliders className="w-5 h-5 text-primary" />
+            <span>Display & Density</span>
+          </CardTitle>
+          <CardDescription>Adjust how information is laid out in lists and tables</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Density */}
-          <div className="space-y-3">
-            <label className="text-sm font-semibold">Row Density</label>
+          <div className="space-y-2.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Row Density
+            </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
+                type="button"
                 onClick={() => setDensity('comfortable')}
-                className={`p-3.5 rounded-xl border text-left text-sm ${
+                className={cn(
+                  'p-4 rounded-2xl border text-left text-sm transition-all min-h-[56px]',
                   density === 'comfortable'
-                    ? 'border-primary bg-primary/10 text-primary font-semibold'
-                    : 'border-border hover:bg-muted'
-                }`}
+                    ? 'glass-card border-primary ring-2 ring-primary/40 bg-primary/10 font-semibold'
+                    : 'glass-card-subtle border-white/10 hover:border-white/20'
+                )}
               >
-                <p>Comfortable</p>
+                <p className="font-semibold text-foreground">Comfortable</p>
                 <p className="text-xs text-muted-foreground font-normal mt-0.5">Spacious paddings and line height</p>
               </button>
               <button
+                type="button"
                 onClick={() => setDensity('compact')}
-                className={`p-3.5 rounded-xl border text-left text-sm ${
+                className={cn(
+                  'p-4 rounded-2xl border text-left text-sm transition-all min-h-[56px]',
                   density === 'compact'
-                    ? 'border-primary bg-primary/10 text-primary font-semibold'
-                    : 'border-border hover:bg-muted'
-                }`}
+                    ? 'glass-card border-primary ring-2 ring-primary/40 bg-primary/10 font-semibold'
+                    : 'glass-card-subtle border-white/10 hover:border-white/20'
+                )}
               >
-                <p>Compact</p>
-                <p className="text-xs text-muted-foreground font-normal mt-0.5">Condensed rows to fit more data</p>
+                <p className="font-semibold text-foreground">Compact</p>
+                <p className="text-xs text-muted-foreground font-normal mt-0.5">High information density</p>
               </button>
             </div>
           </div>
 
-          {/* Default list view */}
-          <div className="space-y-3 border-t border-border pt-4">
-            <label className="text-sm font-semibold">Default Meetings View</label>
+          {/* Default View */}
+          <div className="space-y-2.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Default Meetings View
+            </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
+                type="button"
                 onClick={() => setDefaultView('grid')}
-                className={`flex items-center gap-2 p-3.5 rounded-xl border text-left text-sm ${
+                className={cn(
+                  'p-4 rounded-2xl border text-left text-sm transition-all min-h-[56px]',
                   defaultView === 'grid'
-                    ? 'border-primary bg-primary/10 text-primary font-semibold'
-                    : 'border-border hover:bg-muted'
-                }`}
+                    ? 'glass-card border-primary ring-2 ring-primary/40 bg-primary/10 font-semibold'
+                    : 'glass-card-subtle border-white/10 hover:border-white/20'
+                )}
               >
-                <LayoutGrid className="h-4 w-4" />
-                <span>Card Grid View</span>
+                <p className="font-semibold text-foreground">Grid Card View</p>
+                <p className="text-xs text-muted-foreground font-normal mt-0.5">Visual cards with key metadata</p>
               </button>
               <button
+                type="button"
                 onClick={() => setDefaultView('table')}
-                className={`flex items-center gap-2 p-3.5 rounded-xl border text-left text-sm ${
+                className={cn(
+                  'p-4 rounded-2xl border text-left text-sm transition-all min-h-[56px]',
                   defaultView === 'table'
-                    ? 'border-primary bg-primary/10 text-primary font-semibold'
-                    : 'border-border hover:bg-muted'
-                }`}
+                    ? 'glass-card border-primary ring-2 ring-primary/40 bg-primary/10 font-semibold'
+                    : 'glass-card-subtle border-white/10 hover:border-white/20'
+                )}
               >
-                <List className="h-4 w-4" />
-                <span>Table Row View</span>
+                <p className="font-semibold text-foreground">Table Row View</p>
+                <p className="text-xs text-muted-foreground font-normal mt-0.5">Tabular layout with quick actions</p>
               </button>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Keyboard Shortcuts Reference */}
-      <Card>
+      {/* Shortcuts Reference */}
+      <Card className="rounded-3xl border border-white/15 shadow-xl overflow-hidden">
         <CardHeader>
-          <CardTitle>Keyboard Shortcuts Reference</CardTitle>
-          <CardDescription>Full cheat sheet of shortcuts active in MeetScribe</CardDescription>
+          <CardTitle className="text-xl flex items-center gap-2">
+            <Keyboard className="w-5 h-5 text-primary" />
+            <span>Keyboard Shortcuts</span>
+          </CardTitle>
+          <CardDescription>Global hotkeys to navigate at lightning speed</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-white/10">
             {shortcuts.map((s, idx) => (
-              <div key={idx} className="flex items-center justify-between py-2.5 text-sm">
-                <span className="text-muted-foreground">{s.description}</span>
-                <kbd className="rounded border bg-muted px-2 py-0.5 font-mono text-xs font-semibold">
+              <div key={idx} className="flex items-center justify-between py-3">
+                <span className="text-sm text-foreground">{s.description}</span>
+                <kbd className="px-2.5 py-1 rounded-lg border border-white/15 bg-background/60 backdrop-blur-sm text-xs font-mono font-semibold text-muted-foreground">
                   {s.key}
                 </kbd>
               </div>

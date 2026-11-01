@@ -14,6 +14,8 @@ import {
   Check,
   Plus,
   ArrowLeft,
+  Sparkles,
+  Volume2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -23,6 +25,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Avatar } from '@/components/ui/Avatar';
+import { WindowChrome } from '@/components/ui/WindowChrome';
 import { useToast } from '@/components/ui/Toast';
 import {
   createMeetingActionItem,
@@ -34,6 +37,7 @@ import {
 } from '@/api/meetings';
 import { updateActionItem } from '@/api/actionItems';
 import { ActionItemData, MeetingDetailData, TranscriptData } from '@/types/meeting';
+import { cn } from '@/lib/utils';
 
 export function MeetingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -252,16 +256,17 @@ export function MeetingDetailPage() {
   };
 
   // Filter transcript segments by search
-  const filteredSegments = transcript?.segments.filter((s) =>
-    !transcriptSearch ? true : s.text.toLowerCase().includes(transcriptSearch.toLowerCase())
-  ) || [];
+  const filteredSegments =
+    transcript?.segments.filter((s) =>
+      !transcriptSearch ? true : s.text.toLowerCase().includes(transcriptSearch.toLowerCase())
+    ) || [];
 
   if (isLoading) {
     return (
       <div className="space-y-6 max-w-5xl mx-auto">
-        <Skeleton className="h-10 w-2/3" />
-        <Skeleton className="h-24 w-full rounded-xl" />
-        <Skeleton className="h-96 w-full rounded-xl" />
+        <Skeleton className="h-10 w-2/3 rounded-2xl" />
+        <Skeleton className="h-28 w-full rounded-3xl" />
+        <Skeleton className="h-96 w-full rounded-3xl" />
       </div>
     );
   }
@@ -282,12 +287,12 @@ export function MeetingDetailPage() {
   const completionPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto pb-32">
+    <div className="space-y-6 max-w-5xl mx-auto pb-36">
       {/* Back button & Breadcrumbs */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <button
           onClick={() => navigate('/meetings')}
-          className="flex items-center gap-1 hover:text-foreground transition-colors"
+          className="flex items-center gap-1 hover:text-foreground transition-colors p-1 rounded-md"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           <span>Meetings</span>
@@ -296,111 +301,133 @@ export function MeetingDetailPage() {
         <span className="truncate max-w-xs text-foreground font-medium">{meeting.title}</span>
       </div>
 
-      {/* Header with Title and Metadata */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-3">
-          {isEditingTitle ? (
-            <div className="flex items-center gap-2 flex-1 max-w-xl">
-              <Input
-                data-testid="meeting-title"
-                value={titleInput}
-                onChange={(e) => setTitleInput(e.target.value)}
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSaveTitle();
-                  if (e.key === 'Escape') setIsEditingTitle(false);
-                }}
-              />
-              <Button size="sm" onClick={handleSaveTitle}>
-                Save
+      {/* Glass Header Window */}
+      <div className="glass-card rounded-3xl border border-white/20 shadow-xl overflow-hidden backdrop-blur-2xl">
+        <WindowChrome
+          title="Meeting Document"
+          subtitle={meeting.duration_sec ? `${Math.round(meeting.duration_sec / 60)} mins` : 'Recorded Audio'}
+          actions={
+            <Badge
+              variant={
+                meeting.status === 'done'
+                  ? 'success'
+                  : meeting.status === 'failed'
+                  ? 'destructive'
+                  : 'secondary'
+              }
+            >
+              {meeting.status}
+            </Badge>
+          }
+        />
+
+        <div className="p-6 sm:p-8 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              {isEditingTitle ? (
+                <div className="flex items-center gap-2 max-w-xl">
+                  <Input
+                    data-testid="meeting-title"
+                    value={titleInput}
+                    onChange={(e) => setTitleInput(e.target.value)}
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleSaveTitle();
+                      if (e.key === 'Escape') setIsEditingTitle(false);
+                    }}
+                  />
+                  <Button size="sm" onClick={handleSaveTitle}>
+                    Save
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setIsEditingTitle(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <h1
+                  data-testid="meeting-title"
+                  onClick={() => setIsEditingTitle(true)}
+                  className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground hover:text-primary cursor-pointer transition-colors"
+                  title="Click to rename"
+                >
+                  {meeting.title}
+                </h1>
+              )}
+            </div>
+
+            {/* Export & Markdown Actions */}
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="glass" size="sm" onClick={handleCopyAllMarkdown} className="gap-1.5 text-xs">
+                <Copy className="h-3.5 w-3.5" />
+                <span>Copy All</span>
               </Button>
-              <Button size="sm" variant="outline" onClick={() => setIsEditingTitle(false)}>
-                Cancel
+              <Button
+                data-testid="export-md"
+                variant="glass"
+                size="sm"
+                onClick={() => handleExport('md')}
+                className="gap-1.5 text-xs"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>Markdown</span>
+              </Button>
+              <Button
+                data-testid="export-pdf"
+                variant="glass"
+                size="sm"
+                onClick={() => handleExport('pdf')}
+                className="gap-1.5 text-xs"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>PDF</span>
               </Button>
             </div>
-          ) : (
-            <h1
-              data-testid="meeting-title"
-              onClick={() => setIsEditingTitle(true)}
-              className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground hover:text-primary cursor-pointer transition-colors"
-              title="Click to rename"
-            >
-              {meeting.title}
-            </h1>
-          )}
-        </div>
+          </div>
 
-        {/* Chips */}
-        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-          <Badge variant={meeting.status === 'done' ? 'success' : meeting.status === 'failed' ? 'destructive' : 'secondary'}>
-            {meeting.status}
-          </Badge>
-          <div className="flex items-center gap-1">
-            <Clock className="h-3.5 w-3.5" />
-            <span>{meeting.duration_sec ? `${Math.round(meeting.duration_sec / 60)} mins` : 'Unknown duration'}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Globe className="h-3.5 w-3.5" />
-            <span>{meeting.language || 'English'}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Calendar className="h-3.5 w-3.5" />
-            <span>{new Date(meeting.created_at).toLocaleDateString()}</span>
+          {/* Metadata Chips */}
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground pt-1">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full glass-card-subtle border border-white/10">
+              <Clock className="h-3.5 w-3.5 text-primary/70" />
+              <span>{meeting.duration_sec ? `${Math.round(meeting.duration_sec / 60)} mins` : 'Unknown duration'}</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full glass-card-subtle border border-white/10">
+              <Globe className="h-3.5 w-3.5 text-primary/70" />
+              <span>{meeting.language || 'English'}</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full glass-card-subtle border border-white/10">
+              <Calendar className="h-3.5 w-3.5 text-primary/70" />
+              <span>{new Date(meeting.created_at).toLocaleDateString()}</span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs Layout */}
       <Tabs defaultValue="overview" className="w-full">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-3">
-          <TabsList>
-            <TabsTrigger data-testid="tab-overview" value="overview">
+        <div className="border-b border-white/10 pb-3">
+          <TabsList className="glass-card-subtle p-1 rounded-2xl border border-white/10">
+            <TabsTrigger data-testid="tab-overview" value="overview" className="rounded-xl min-h-[36px]">
               Overview
             </TabsTrigger>
-            <TabsTrigger data-testid="tab-transcript" value="transcript">
+            <TabsTrigger data-testid="tab-transcript" value="transcript" className="rounded-xl min-h-[36px]">
               Transcript
             </TabsTrigger>
-            <TabsTrigger data-testid="tab-actions" value="actions">
+            <TabsTrigger data-testid="tab-actions" value="actions" className="rounded-xl min-h-[36px]">
               Action Items ({meeting.action_items.length})
             </TabsTrigger>
           </TabsList>
-
-          {/* Export & Copy buttons */}
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={handleCopyAllMarkdown} className="gap-1.5 text-xs">
-              <Copy className="h-3.5 w-3.5" />
-              <span>Copy All</span>
-            </Button>
-            <Button
-              data-testid="export-md"
-              variant="outline"
-              size="sm"
-              onClick={() => handleExport('md')}
-              className="gap-1.5 text-xs"
-            >
-              <Download className="h-3.5 w-3.5" />
-              <span>Markdown</span>
-            </Button>
-            <Button
-              data-testid="export-pdf"
-              variant="outline"
-              size="sm"
-              onClick={() => handleExport('pdf')}
-              className="gap-1.5 text-xs"
-            >
-              <Download className="h-3.5 w-3.5" />
-              <span>PDF</span>
-            </Button>
-          </div>
         </div>
 
         {/* Tab 1: Overview */}
         <TabsContent value="overview" className="space-y-6 pt-4">
-          {/* Executive Summary */}
-          <Card data-testid="summary-card" className="shadow-sm">
+          {/* Executive Summary Glass Card */}
+          <Card data-testid="summary-card" className="rounded-3xl border border-white/15 shadow-xl overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div>
-                <CardTitle className="text-lg">Executive Summary</CardTitle>
+                <CardTitle className="text-xl flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-primary" />
+                  <span>Executive Summary</span>
+                </CardTitle>
                 <CardDescription>Synthesized key takeaways and highlights</CardDescription>
               </div>
               <Button
@@ -420,8 +447,8 @@ export function MeetingDetailPage() {
 
               {/* Key discussion points */}
               {meeting.summary?.key_points && meeting.summary.key_points.length > 0 && (
-                <div className="mt-6 border-t border-border pt-4">
-                  <h4 className="text-sm font-semibold mb-3">Key Discussion Points</h4>
+                <div className="mt-6 border-t border-white/10 pt-4">
+                  <h4 className="text-sm font-bold mb-3 text-foreground">Key Discussion Points</h4>
                   <ul className="space-y-2 text-sm text-muted-foreground list-disc list-inside">
                     {meeting.summary.key_points.map((point, idx) => (
                       <li key={idx} className="leading-snug">{point}</li>
@@ -432,12 +459,12 @@ export function MeetingDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Key Decisions Card */}
-          <Card data-testid="decisions-card" className="shadow-sm">
+          {/* Key Decisions Glass Card */}
+          <Card data-testid="decisions-card" className="rounded-3xl border border-white/15 shadow-xl overflow-hidden">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div>
-                <CardTitle className="text-lg">Key Decisions Made</CardTitle>
-                <CardDescription>Decisions recorded during the meeting</CardDescription>
+                <CardTitle className="text-xl">Key Decisions Made</CardTitle>
+                <CardDescription>Explicit conclusions and agreements reached</CardDescription>
               </div>
               <Button
                 variant="ghost"
@@ -457,7 +484,7 @@ export function MeetingDetailPage() {
                   {meeting.summary.decisions.map((dec, idx) => (
                     <div
                       key={idx}
-                      className="flex items-start gap-3 p-3 rounded-lg bg-primary/5 border border-primary/10 text-sm"
+                      className="flex items-start gap-3 p-3.5 rounded-2xl glass-card-subtle border border-primary/20 text-sm"
                     >
                       <span className="font-bold text-primary shrink-0">✓</span>
                       <span className="text-foreground leading-snug">{dec}</span>
@@ -475,30 +502,30 @@ export function MeetingDetailPage() {
         <TabsContent value="transcript" className="space-y-4 pt-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 data-testid="transcript-search"
-                placeholder="Search transcript..."
+                placeholder="Search transcript text..."
                 value={transcriptSearch}
                 onChange={(e) => setTranscriptSearch(e.target.value)}
-                className="pl-9 h-9"
+                className="pl-10"
+                startIcon={<Search className="h-4 w-4 text-muted-foreground" />}
               />
             </div>
-            <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground cursor-pointer">
+            <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={followAlong}
                 onChange={(e) => setFollowAlong(e.target.checked)}
-                className="rounded border-input text-primary focus:ring-primary"
+                className="rounded border-input text-primary focus:ring-primary h-4 w-4"
               />
               <span>Auto-scroll (Follow Along)</span>
             </label>
           </div>
 
-          <Card className="shadow-sm">
-            <CardContent className="p-4 sm:p-6 divide-y divide-border max-h-[550px] overflow-y-auto">
+          <Card className="rounded-3xl border border-white/15 shadow-xl overflow-hidden">
+            <CardContent className="p-4 sm:p-6 divide-y divide-white/10 max-h-[550px] overflow-y-auto">
               {filteredSegments.length === 0 ? (
-                <p className="text-center py-10 text-sm text-muted-foreground">
+                <p className="text-center py-12 text-sm text-muted-foreground">
                   {transcriptSearch ? 'No matching segments found.' : 'No transcript available.'}
                 </p>
               ) : (
@@ -510,14 +537,15 @@ export function MeetingDetailPage() {
                       ref={(el) => (segmentRefs.current[seg.id] = el)}
                       data-testid="transcript-segment"
                       onClick={() => seekTo(seg.start)}
-                      className={`py-3 px-3 rounded-lg cursor-pointer transition-colors ${
+                      className={cn(
+                        'py-3.5 px-3.5 rounded-2xl cursor-pointer transition-all',
                         isActive
-                          ? 'bg-primary/15 text-foreground font-medium'
-                          : 'hover:bg-muted/50 text-foreground/90'
-                      }`}
+                          ? 'glass-card bg-primary/15 border-primary/30 text-foreground font-medium shadow-sm'
+                          : 'hover:bg-white/10 text-foreground/90'
+                      )}
                     >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-mono text-[11px] text-primary/80 bg-primary/10 px-1.5 py-0.5 rounded">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="font-mono text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
                           {Math.floor(seg.start / 60)}:
                           {Math.floor(seg.start % 60).toString().padStart(2, '0')}
                         </span>
@@ -533,47 +561,54 @@ export function MeetingDetailPage() {
 
         {/* Tab 3: Action Items */}
         <TabsContent value="actions" className="space-y-6 pt-4">
-          {/* Progress bar */}
-          <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-            <span>
-              {completedCount} of {totalCount} completed
-            </span>
-            <span>{completionPct}%</span>
+          <div className="glass-card p-4 rounded-2xl border border-white/15">
+            <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground mb-1.5">
+              <span>
+                {completedCount} of {totalCount} completed
+              </span>
+              <span className="font-mono tabular-nums">{completionPct}%</span>
+            </div>
+            <ProgressBar value={completionPct} />
           </div>
-          <ProgressBar value={completionPct} />
 
           {/* Action item rows */}
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {meeting.action_items.map((item) => (
               <div
                 key={item.id}
                 data-testid="action-item-row"
-                className={`flex items-start sm:items-center justify-between gap-3 p-3.5 rounded-xl border bg-card transition-all ${
-                  item.status === 'completed' ? 'opacity-60 bg-muted/30' : 'shadow-sm'
-                }`}
+                className={cn(
+                  'flex items-start sm:items-center justify-between gap-3 p-4 rounded-2xl border transition-all',
+                  item.status === 'completed'
+                    ? 'glass-card-subtle opacity-60 border-white/10'
+                    : 'glass-card border-white/15 shadow-md'
+                )}
               >
-                <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
+                <div className="flex items-start sm:items-center gap-3.5 flex-1 min-w-0">
                   <button
                     data-testid="action-checkbox"
+                    type="button"
                     onClick={() => handleToggleItemStatus(item)}
-                    className={`h-5 w-5 rounded-md border flex items-center justify-center transition-colors shrink-0 mt-0.5 sm:mt-0 ${
+                    className={cn(
+                      'h-6 w-6 rounded-lg border flex items-center justify-center transition-colors shrink-0 mt-0.5 sm:mt-0',
                       item.status === 'completed'
                         ? 'bg-primary border-primary text-primary-foreground'
-                        : 'border-input hover:border-primary'
-                    }`}
+                        : 'border-white/30 hover:border-primary glass-card-subtle'
+                    )}
                   >
-                    {item.status === 'completed' && <Check className="h-3.5 w-3.5" />}
+                    {item.status === 'completed' && <Check className="h-4 w-4" />}
                   </button>
 
                   <div className="flex-1 min-w-0">
                     <p
-                      className={`text-sm font-medium ${
+                      className={cn(
+                        'text-sm font-medium',
                         item.status === 'completed' ? 'line-through text-muted-foreground' : 'text-foreground'
-                      }`}
+                      )}
                     >
                       {item.description}
                     </p>
-                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 mt-1.5">
                       <Badge
                         variant={
                           item.priority === 'high'
@@ -586,7 +621,7 @@ export function MeetingDetailPage() {
                         {item.priority}
                       </Badge>
                       {item.owner && (
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <Avatar name={item.owner} size="sm" />
                           <span>{item.owner}</span>
                         </div>
@@ -600,9 +635,10 @@ export function MeetingDetailPage() {
 
                 {item.source_start_sec !== null && (
                   <button
+                    type="button"
                     onClick={() => seekTo(item.source_start_sec!)}
-                    className="text-xs font-mono text-primary hover:underline shrink-0"
-                    title="Jump to dialogue"
+                    className="text-xs font-mono text-primary hover:underline shrink-0 px-2 py-1 rounded-lg glass-card-subtle border border-primary/20"
+                    title="Jump to audio segment"
                   >
                     @{Math.floor(item.source_start_sec! / 60)}:
                     {Math.floor(item.source_start_sec! % 60).toString().padStart(2, '0')}
@@ -612,10 +648,10 @@ export function MeetingDetailPage() {
             ))}
           </div>
 
-          {/* Add new action item form */}
+          {/* Add new action item */}
           {isAddingItem ? (
-            <Card className="p-4 border-dashed shadow-sm">
-              <form onSubmit={handleCreateActionItem} className="space-y-3">
+            <Card className="p-5 border-dashed border-white/25 rounded-3xl shadow-xl">
+              <form onSubmit={handleCreateActionItem} className="space-y-3.5">
                 <Input
                   placeholder="What needs to be done?"
                   value={newDesc}
@@ -633,18 +669,18 @@ export function MeetingDetailPage() {
                   <select
                     value={newPriority}
                     onChange={(e) => setNewPriority(e.target.value as 'low' | 'medium' | 'high')}
-                    className="h-9 px-3 rounded-md border border-input bg-background text-sm sm:w-1/2"
+                    className="h-11 px-3.5 rounded-xl border border-white/15 bg-background/60 backdrop-blur-md text-sm sm:w-1/2 outline-none focus:ring-2 focus:ring-primary"
                   >
                     <option value="low">Low Priority</option>
                     <option value="medium">Medium Priority</option>
                     <option value="high">High Priority</option>
                   </select>
                 </div>
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button type="button" variant="outline" size="sm" onClick={() => setIsAddingItem(false)}>
+                <div className="flex justify-end gap-2.5 pt-2">
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setIsAddingItem(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit" size="sm">
+                  <Button type="submit" size="sm" className="shadow-md">
                     Save Item
                   </Button>
                 </div>
@@ -654,9 +690,9 @@ export function MeetingDetailPage() {
             <Button
               data-testid="action-add"
               variant="outline"
-              size="sm"
+              size="lg"
               onClick={() => setIsAddingItem(true)}
-              className="gap-2 w-full border-dashed"
+              className="gap-2 w-full border-dashed rounded-2xl py-6 min-h-[48px]"
             >
               <Plus className="h-4 w-4" />
               <span>Add Action Item</span>
@@ -665,11 +701,11 @@ export function MeetingDetailPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Sticky Audio Player (U09) */}
+      {/* Sticky macOS Glass Audio Player (U09) */}
       {audioUrl && (
         <div
           data-testid="audio-player"
-          className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-card/95 backdrop-blur-md px-4 py-3 shadow-2xl md:pl-64"
+          className="fixed bottom-20 md:bottom-3 left-3 right-3 md:left-64 md:right-4 z-40 max-w-4xl md:mx-auto rounded-3xl glass-dock shadow-2xl border border-white/20 p-3 sm:px-5 sm:py-3.5 backdrop-blur-3xl animate-in slide-in-from-bottom-4 duration-300"
         >
           <audio
             ref={audioRef}
@@ -679,58 +715,62 @@ export function MeetingDetailPage() {
             onEnded={() => setIsPlaying(false)}
           />
 
-          <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
             {/* Play controls */}
             <div className="flex items-center gap-3">
               <button
+                type="button"
                 onClick={() => seekRelative(-10)}
-                className="p-1.5 text-muted-foreground hover:text-foreground rounded"
+                className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-white/10 transition-colors"
                 title="Rewind 10 seconds"
               >
                 <RotateCcw className="h-4 w-4" />
               </button>
 
               <button
+                type="button"
                 onClick={togglePlayPause}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground shadow hover:bg-primary/90 transition-transform active:scale-95"
+                className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/30 hover:scale-105 active:scale-95 transition-all"
                 title={isPlaying ? 'Pause' : 'Play'}
               >
-                {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
+                {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5 fill-current" />}
               </button>
 
               <button
+                type="button"
                 onClick={() => seekRelative(10)}
-                className="p-1.5 text-muted-foreground hover:text-foreground rounded"
+                className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-white/10 transition-colors"
                 title="Forward 10 seconds"
               >
                 <RotateCw className="h-4 w-4" />
               </button>
 
-              <span className="font-mono text-xs text-muted-foreground ml-2">
+              <span className="font-mono text-xs font-semibold tabular-nums text-foreground ml-1">
                 {Math.floor(currentTime / 60)}:{Math.floor(currentTime % 60).toString().padStart(2, '0')} /{' '}
                 {Math.floor(duration / 60)}:{Math.floor(duration % 60).toString().padStart(2, '0')}
               </span>
             </div>
 
             {/* Scrubber slider */}
-            <div className="w-full sm:flex-1 mx-4">
+            <div className="w-full sm:flex-1 mx-2 sm:mx-4">
               <input
                 type="range"
                 min={0}
                 max={duration || 100}
                 value={currentTime}
                 onChange={(e) => seekTo(Number(e.target.value))}
-                className="w-full h-1.5 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+                className="w-full h-2 bg-secondary/80 rounded-lg appearance-none cursor-pointer accent-primary"
               />
             </div>
 
             {/* Speed selector */}
             <div className="flex items-center gap-2">
+              <Volume2 className="w-4 h-4 text-muted-foreground hidden sm:inline-block" />
               <select
                 data-testid="speed-select"
                 value={playbackRate}
                 onChange={(e) => changeSpeed(Number(e.target.value))}
-                className="h-8 px-2 text-xs font-semibold rounded-md border border-input bg-background"
+                className="h-8 px-2.5 text-xs font-bold rounded-xl border border-white/20 bg-background/70 backdrop-blur-sm cursor-pointer"
               >
                 <option value={0.75}>0.75x</option>
                 <option value={1}>1.0x</option>

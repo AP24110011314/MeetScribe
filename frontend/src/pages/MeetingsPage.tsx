@@ -10,10 +10,10 @@ import {
   Edit2,
   Download,
   Plus,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -120,7 +120,7 @@ export function MeetingsPage() {
       await deleteMeeting(deleteTarget.id);
       setMeetings((prev) => prev.filter((m) => m.id !== deleteTarget.id));
       setTotal((prev) => Math.max(0, prev - 1));
-      toast({ type: 'success', title: 'Deleted', description: 'Meeting removed' });
+      toast({ type: 'success', title: 'Deleted', description: 'Meeting permanently removed' });
       setDeleteTarget(null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Delete failed';
@@ -135,97 +135,102 @@ export function MeetingsPage() {
     try {
       await exportMeetingNotes(m.id, format);
       toast({ type: 'success', title: 'Exported', description: `Saved as ${format.toUpperCase()}` });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Export failed';
-      toast({ type: 'error', title: 'Export Error', description: msg });
+    } catch {
+      toast({ type: 'error', title: 'Export failed', description: 'Could not export notes' });
     }
   };
 
-  const totalPages = Math.ceil(total / pageSize) || 1;
+  const totalPages = Math.ceil(total / pageSize);
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
-      {/* Header and Controls */}
+      {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Meetings</h1>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold glass-card-subtle text-primary border border-primary/20 mb-2">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Recorded Library</span>
+          </div>
+          <h1 className="text-3xl font-extrabold tracking-tight">Meetings</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Search, filter, and review all your recorded meeting sessions.
+            Browse, search, and export transcribed meetings and summaries ({total} total)
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* View toggle */}
-          <button
+        <div className="flex items-center gap-2.5">
+          <Button
+            type="button"
             data-testid="view-toggle"
+            variant="glass"
+            size="icon"
             onClick={toggleView}
-            className="flex items-center gap-1.5 p-2 rounded-lg border border-input bg-card hover:bg-muted text-muted-foreground hover:text-foreground text-xs font-medium transition-colors"
-            title={`Switch to ${viewMode === 'grid' ? 'Table' : 'Grid'} view`}
+            title={`Switch to ${viewMode === 'grid' ? 'table' : 'grid'} view`}
           >
             {viewMode === 'grid' ? <List className="h-4 w-4" /> : <LayoutGrid className="h-4 w-4" />}
-            <span className="hidden sm:inline">{viewMode === 'grid' ? 'Table' : 'Grid'}</span>
-          </button>
+          </Button>
 
-          <Button onClick={() => navigate('/upload')} className="gap-2 shadow">
+          <Button onClick={() => navigate('/upload')} className="gap-2 shadow-lg shadow-primary/20">
             <Plus className="h-4 w-4" />
             <span>New Upload</span>
           </Button>
         </div>
       </div>
 
-      {/* Filters Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-card p-3 rounded-xl border shadow-sm">
-        {/* Search input */}
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+      {/* Glass Filter & Search Toolbar */}
+      <div className="glass-card p-3 rounded-2xl border border-white/15 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+        <div className="flex-1 relative">
           <Input
             data-testid="search-input"
-            placeholder="Search meetings and transcripts..."
+            type="text"
+            placeholder="Search meetings by title or text..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-9"
+            className="w-full bg-transparent border-white/10"
+            startIcon={<Search className="h-4 w-4 text-muted-foreground" />}
           />
         </div>
 
-        {/* Status filter */}
-        <select
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value);
-            setPage(1);
-          }}
-          className="h-9 px-3 rounded-md border border-input bg-background text-sm font-medium outline-none"
-        >
-          <option value="">All Statuses</option>
-          <option value="done">Done</option>
-          <option value="processing">Processing</option>
-          <option value="queued">Queued</option>
-          <option value="failed">Failed</option>
-        </select>
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+          {/* Status select */}
+          <select
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value);
+              setPage(1);
+            }}
+            className="h-10 px-3 rounded-xl border border-white/15 bg-background/60 backdrop-blur-md text-xs font-medium outline-none focus:ring-2 focus:ring-primary min-w-[110px]"
+          >
+            <option value="">All Statuses</option>
+            <option value="done">Done</option>
+            <option value="processing">Processing</option>
+            <option value="queued">Queued</option>
+            <option value="failed">Failed</option>
+          </select>
 
-        {/* Sort select */}
-        <select
-          value={`${sortBy}:${order}`}
-          onChange={(e) => {
-            const [s, o] = e.target.value.split(':');
-            setSortBy(s);
-            setOrder(o);
-          }}
-          className="h-9 px-3 rounded-md border border-input bg-background text-sm font-medium outline-none"
-        >
-          <option value="created_at:desc">Newest First</option>
-          <option value="created_at:asc">Oldest First</option>
-          <option value="title:asc">Title A-Z</option>
-          <option value="title:desc">Title Z-A</option>
-          <option value="duration:desc">Longest First</option>
-        </select>
+          {/* Sort select */}
+          <select
+            value={`${sortBy}:${order}`}
+            onChange={(e) => {
+              const [s, o] = e.target.value.split(':');
+              setSortBy(s);
+              setOrder(o);
+            }}
+            className="h-10 px-3 rounded-xl border border-white/15 bg-background/60 backdrop-blur-md text-xs font-medium outline-none focus:ring-2 focus:ring-primary min-w-[130px]"
+          >
+            <option value="created_at:desc">Newest First</option>
+            <option value="created_at:asc">Oldest First</option>
+            <option value="title:asc">Title A-Z</option>
+            <option value="title:desc">Title Z-A</option>
+            <option value="duration:desc">Longest First</option>
+          </select>
+        </div>
       </div>
 
       {/* Loading state */}
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-48 rounded-xl" />
+            <Skeleton key={i} className="h-48 rounded-3xl" />
           ))}
         </div>
       ) : meetings.length === 0 ? (
@@ -241,18 +246,18 @@ export function MeetingsPage() {
           onAction={() => navigate('/upload')}
         />
       ) : viewMode === 'grid' ? (
-        /* Grid View */
+        /* Glass Grid View */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {meetings.map((m) => (
-            <Card
+            <div
               key={m.id}
               data-testid="meeting-card"
               onClick={() => navigate(`/meetings/${m.id}`)}
-              className="group cursor-pointer hover:border-primary/50 hover:shadow-md transition-all flex flex-col justify-between"
+              className="glass-card p-5 border border-white/15 rounded-3xl cursor-pointer hover:-translate-y-1 hover:shadow-xl transition-all duration-200 flex flex-col justify-between group"
             >
-              <CardContent className="p-5 space-y-4">
+              <div className="space-y-4">
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-semibold text-base line-clamp-1 group-hover:text-primary transition-colors">
+                  <h3 className="font-bold text-base line-clamp-1 group-hover:text-primary transition-colors text-foreground">
                     {m.title}
                   </h3>
                   <Badge
@@ -270,91 +275,91 @@ export function MeetingsPage() {
                 </div>
 
                 <div className="space-y-1.5 text-xs text-muted-foreground">
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="h-3.5 w-3.5" />
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-3.5 w-3.5 text-primary/70 shrink-0" />
                     <span>
                       {m.duration_sec ? `${Math.round(m.duration_sec / 60)} mins` : 'Unknown'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <Calendar className="h-3.5 w-3.5" />
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-3.5 w-3.5 text-primary/70 shrink-0" />
                     <span>{new Date(m.created_at).toLocaleDateString()}</span>
                   </div>
                 </div>
+              </div>
 
-                <div className="flex items-center justify-between border-t border-border pt-3 text-xs">
-                  <span className="text-muted-foreground">
-                    {m.action_items_count} action item{m.action_items_count === 1 ? '' : 's'}
-                  </span>
+              <div className="flex items-center justify-between border-t border-white/10 pt-3.5 mt-4 text-xs">
+                <span className="text-muted-foreground font-medium">
+                  {m.action_items_count} action item{m.action_items_count === 1 ? '' : 's'}
+                </span>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100">
+                {/* Card Action Icons */}
+                <div className="flex items-center gap-1 opacity-90 group-hover:opacity-100">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRenameTarget(m);
+                      setNewTitle(m.title);
+                    }}
+                    className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-white/10 transition-colors"
+                    title="Rename"
+                  >
+                    <Edit2 className="h-3.5 w-3.5" />
+                  </button>
+                  {m.status === 'done' && (
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setRenameTarget(m);
-                        setNewTitle(m.title);
-                      }}
-                      className="p-1 text-muted-foreground hover:text-foreground rounded"
-                      title="Rename"
+                      type="button"
+                      onClick={(e) => handleExport(e, m, 'md')}
+                      className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-white/10 transition-colors"
+                      title="Export Markdown"
                     >
-                      <Edit2 className="h-3.5 w-3.5" />
+                      <Download className="h-3.5 w-3.5" />
                     </button>
-                    {m.status === 'done' && (
-                      <button
-                        onClick={(e) => handleExport(e, m, 'md')}
-                        className="p-1 text-muted-foreground hover:text-foreground rounded"
-                        title="Export Markdown"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                    <button
-                      data-testid="delete-meeting"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteTarget(m);
-                      }}
-                      className="p-1 text-muted-foreground hover:text-destructive rounded"
-                      title="Delete"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
+                  )}
+                  <button
+                    type="button"
+                    data-testid="delete-meeting"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTarget(m);
+                    }}
+                    className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-white/10 transition-colors"
+                    title="Delete"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       ) : (
-        /* Table View */
-        <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
+        /* Glass Table View */
+        <div className="glass-card rounded-3xl border border-white/15 overflow-hidden shadow-xl">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="bg-muted/50 text-xs font-semibold uppercase text-muted-foreground border-b">
+              <thead className="glass-card-subtle text-xs font-semibold uppercase text-muted-foreground border-b border-white/10">
                 <tr>
-                  <th className="px-4 py-3">Title</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Duration</th>
-                  <th className="px-4 py-3">Date</th>
-                  <th className="px-4 py-3">Action Items</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  <th className="px-5 py-3.5">Title</th>
+                  <th className="px-5 py-3.5">Status</th>
+                  <th className="px-5 py-3.5">Duration</th>
+                  <th className="px-5 py-3.5">Date</th>
+                  <th className="px-5 py-3.5">Action Items</th>
+                  <th className="px-5 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y divide-white/10">
                 {meetings.map((m) => (
                   <tr
                     key={m.id}
                     data-testid="meeting-row"
                     onClick={() => navigate(`/meetings/${m.id}`)}
-                    className="hover:bg-muted/40 cursor-pointer transition-colors"
+                    className="hover:bg-white/10 cursor-pointer transition-colors"
                   >
-                    <td className="px-4 py-3 font-semibold text-foreground max-w-xs truncate">
-                      {m.title}
-                    </td>
-                    <td className="px-4 py-3">
+                    <td className="px-5 py-4 font-semibold text-foreground">{m.title}</td>
+                    <td className="px-5 py-4">
                       <Badge
-                        data-testid="status-badge"
                         variant={
                           m.status === 'done'
                             ? 'success'
@@ -366,34 +371,48 @@ export function MeetingsPage() {
                         {m.status}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">
-                      {m.duration_sec ? `${Math.round(m.duration_sec / 60)}m` : '—'}
+                    <td className="px-5 py-4 text-xs text-muted-foreground">
+                      {m.duration_sec ? `${Math.round(m.duration_sec / 60)} mins` : 'Unknown'}
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                    <td className="px-5 py-4 text-xs text-muted-foreground">
                       {new Date(m.created_at).toLocaleDateString()}
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                    <td className="px-5 py-4 text-xs text-muted-foreground">
                       {m.action_items_count}
                     </td>
-                    <td className="px-4 py-3 text-right space-x-1" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => {
-                          setRenameTarget(m);
-                          setNewTitle(m.title);
-                        }}
-                        className="p-1.5 text-muted-foreground hover:text-foreground rounded"
-                        title="Rename"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </button>
-                      <button
-                        data-testid="delete-meeting"
-                        onClick={() => setDeleteTarget(m)}
-                        className="p-1.5 text-muted-foreground hover:text-destructive rounded"
-                        title="Delete"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                    <td className="px-5 py-4 text-right">
+                      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRenameTarget(m);
+                            setNewTitle(m.title);
+                          }}
+                          className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-white/10"
+                          title="Rename"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </button>
+                        {m.status === 'done' && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleExport(e, m, 'md')}
+                            className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-white/10"
+                            title="Export Markdown"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          data-testid="delete-meeting"
+                          onClick={() => setDeleteTarget(m)}
+                          className="p-1.5 text-muted-foreground hover:text-destructive rounded-lg hover:bg-white/10"
+                          title="Delete"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -403,39 +422,34 @@ export function MeetingsPage() {
         </div>
       )}
 
-      {/* Pagination Controls */}
+      {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground">
-          <span>
-            Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, total)} of {total} meetings
+        <div className="flex items-center justify-center gap-2 pt-4">
+          <Button
+            variant="glass"
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            Previous
+          </Button>
+          <span className="text-xs text-muted-foreground px-2 font-mono">
+            Page {page} of {totalPages}
           </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              Previous
-            </Button>
-            <span className="font-medium text-foreground">
-              Page {page} of {totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            >
-              Next
-            </Button>
-          </div>
+          <Button
+            variant="glass"
+            size="sm"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            Next
+          </Button>
         </div>
       )}
 
       {/* Rename Dialog */}
-      <Dialog open={!!renameTarget} onOpenChange={(open) => !open && setRenameTarget(null)}>
-        <DialogContent>
+      <Dialog open={!!renameTarget} onOpenChange={() => setRenameTarget(null)}>
+        <DialogContent className="glass-panel border-white/20 rounded-3xl">
           <DialogHeader>
             <DialogTitle>Rename Meeting</DialogTitle>
             <DialogDescription>Enter a new descriptive title for this meeting session.</DialogDescription>
@@ -444,7 +458,7 @@ export function MeetingsPage() {
             <Input
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="Meeting title"
+              placeholder="e.g. Sprint Retrospective"
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleConfirmRename();
@@ -452,7 +466,7 @@ export function MeetingsPage() {
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRenameTarget(null)}>
+            <Button variant="ghost" onClick={() => setRenameTarget(null)}>
               Cancel
             </Button>
             <Button onClick={handleConfirmRename}>Save Title</Button>
@@ -461,17 +475,19 @@ export function MeetingsPage() {
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <DialogContent>
+      <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+        <DialogContent className="glass-panel border-white/20 rounded-3xl">
           <DialogHeader>
-            <DialogTitle>Delete Meeting?</DialogTitle>
+            <DialogTitle className="text-destructive flex items-center gap-2">
+              <Trash2 className="h-5 w-5" />
+              <span>Delete Meeting</span>
+            </DialogTitle>
             <DialogDescription>
-              This will permanently delete "{deleteTarget?.title}" including its transcript,
-              summary, action items, and original audio file. This action cannot be undone.
+              Are you sure you want to permanently delete "{deleteTarget?.title}"? All associated transcripts, summaries, and action items will be removed.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
+            <Button variant="ghost" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
               Cancel
             </Button>
             <Button
@@ -480,7 +496,7 @@ export function MeetingsPage() {
               onClick={handleConfirmDelete}
               isLoading={isDeleting}
             >
-              Delete Permanently
+              Confirm Delete
             </Button>
           </DialogFooter>
         </DialogContent>
