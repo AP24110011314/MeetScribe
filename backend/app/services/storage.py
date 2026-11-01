@@ -36,9 +36,23 @@ class S3StorageService:
             settings.S3_PUBLIC_ENDPOINT_URL or settings.S3_ENDPOINT_URL or None
         )
 
+        # MinIO requires path-style addressing; real AWS S3 (when endpoint_url is None) requires auto/virtual-host style
+        s3_extra: dict[str, Any] = {}
+        if self.endpoint_url:
+            s3_extra["addressing_style"] = "path"
+
         boto_config = Config(
             signature_version="s3v4",
-            s3={"addressing_style": "path"},
+            s3=s3_extra if s3_extra else None,
+        )
+
+        presign_s3_extra: dict[str, Any] = {}
+        if self.public_endpoint_url:
+            presign_s3_extra["addressing_style"] = "path"
+
+        presign_boto_config = Config(
+            signature_version="s3v4",
+            s3=presign_s3_extra if presign_s3_extra else None,
         )
 
         # Internal client for server-side calls (head, download, upload, delete)
@@ -58,7 +72,7 @@ class S3StorageService:
             aws_access_key_id=settings.S3_ACCESS_KEY,
             aws_secret_access_key=settings.S3_SECRET_KEY,
             region_name=settings.S3_REGION,
-            config=boto_config,
+            config=presign_boto_config,
         )
 
     def presign_upload(

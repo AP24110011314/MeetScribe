@@ -81,6 +81,13 @@ class Settings(BaseSettings):
                 return v.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
         return v
 
+    @field_validator("S3_ENDPOINT_URL", "S3_PUBLIC_ENDPOINT_URL", mode="before")
+    @classmethod
+    def normalize_empty_s3_endpoints(cls, v: str | None) -> str | None:
+        if v is not None and isinstance(v, str) and not v.strip():
+            return None
+        return v
+
     @model_validator(mode="after")
     def sync_database_urls(self) -> "Settings":
         if self.DATABASE_URL and ("localhost" not in self.DATABASE_URL):
@@ -88,6 +95,16 @@ class Settings(BaseSettings):
                 self.DATABASE_URL_SYNC = self.DATABASE_URL.replace(
                     "postgresql+asyncpg://", "postgresql+psycopg://"
                 )
+        if self.S3_ACCESS_KEY != "minioadmin" or self.ENV not in ("development", "test"):
+            if self.S3_ENDPOINT_URL and (
+                "localhost" in self.S3_ENDPOINT_URL or "127.0.0.1" in self.S3_ENDPOINT_URL
+            ):
+                self.S3_ENDPOINT_URL = None
+            if self.S3_PUBLIC_ENDPOINT_URL and (
+                "localhost" in self.S3_PUBLIC_ENDPOINT_URL
+                or "127.0.0.1" in self.S3_PUBLIC_ENDPOINT_URL
+            ):
+                self.S3_PUBLIC_ENDPOINT_URL = None
         return self
 
     @field_validator("API_PORT")

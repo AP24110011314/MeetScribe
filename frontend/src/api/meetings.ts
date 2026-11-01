@@ -108,6 +108,7 @@ export async function uploadAudioFile(
   const uploadInfo = await requestPresignedUpload(file.name, mimeType, file.size);
 
   // 2. Upload file directly via presigned PUT
+  console.log(`[Upload] Uploading ${file.name} to presigned URL:`, uploadInfo.upload_url);
   await new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open(uploadInfo.upload_method || 'PUT', uploadInfo.upload_url);
@@ -140,7 +141,10 @@ export async function uploadAudioFile(
       }
     };
 
-    xhr.onerror = () => reject(new Error('Network error during file upload'));
+    xhr.onerror = () => {
+      console.error('Network error uploading file to URL:', uploadInfo.upload_url);
+      reject(new Error('Network error during file upload. Check your S3 bucket CORS configuration.'));
+    };
     xhr.send(file);
   });
 
