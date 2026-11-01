@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -15,12 +15,16 @@ import {
   Keyboard,
   ChevronLeft,
   ChevronRight,
+  Plus,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { Avatar } from '@/components/ui/Avatar';
 import { CommandPalette } from '@/components/CommandPalette';
 import { KeyboardShortcutsModal } from '@/components/KeyboardShortcutsModal';
+import { GradientMeshBackground } from '@/components/ui/GradientMeshBackground';
+import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher';
+import { cn } from '@/lib/utils';
 
 export function AppShell() {
   const { user, logout } = useAuth();
@@ -32,11 +36,19 @@ export function AppShell() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   // Close mobile drawer on route change
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [location.pathname]);
+
+  // Track scroll position for header condensing
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const scrollTop = e.currentTarget.scrollTop;
+    setIsScrolled(scrollTop > 15);
+  };
 
   // Global keyboard shortcuts
   useEffect(() => {
@@ -45,7 +57,10 @@ export function AppShell() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeTag = (document.activeElement?.tagName || '').toLowerCase();
-      const isInput = activeTag === 'input' || activeTag === 'textarea' || (document.activeElement as HTMLElement)?.isContentEditable;
+      const isInput =
+        activeTag === 'input' ||
+        activeTag === 'textarea' ||
+        (document.activeElement as HTMLElement)?.isContentEditable;
 
       // Cmd+K / Ctrl+K
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -111,52 +126,64 @@ export function AppShell() {
   ];
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
-      {/* Desktop Sidebar */}
+    <div className="flex h-screen w-full overflow-hidden bg-background/80 text-foreground relative select-none">
+      {/* Background Animated Gradient Mesh */}
+      <GradientMeshBackground />
+
+      {/* Desktop macOS Finder Sidebar */}
       <aside
-        className={`hidden md:flex flex-col border-r border-border bg-card transition-all duration-300 ease-in-out shrink-0 ${
+        className={cn(
+          'hidden md:flex flex-col border-r border-white/10 glass-panel backdrop-blur-2xl transition-all duration-300 ease-in-out shrink-0 z-30',
           isCollapsed ? 'w-20' : 'w-64'
-        }`}
+        )}
       >
-        {/* Brand header */}
-        <div className="flex h-16 items-center justify-between px-4 border-b border-border">
-          {!isCollapsed && (
-            <div className="flex items-center gap-2 font-bold text-lg text-primary tracking-tight">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-extrabold text-sm shadow">
+        {/* Window Chrome / Brand header */}
+        <div className="flex h-16 items-center justify-between px-4 border-b border-white/10">
+          {!isCollapsed ? (
+            <div className="flex items-center gap-2.5 font-bold text-lg text-primary tracking-tight">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground font-black text-xs shadow-md">
                 MS
               </div>
-              <span>MeetScribe</span>
+              <span className="text-foreground font-semibold">MeetScribe</span>
             </div>
-          )}
-          {isCollapsed && (
-            <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-extrabold text-sm shadow">
+          ) : (
+            <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground font-black text-xs shadow-md">
               MS
             </div>
           )}
+
           <button
+            type="button"
+            data-testid="sidebar-toggle"
             onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-1 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground hidden md:block"
+            className="p-1.5 rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground transition-colors hidden md:block"
             title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </button>
         </div>
 
-        {/* Upload Action */}
+        {/* Upload Action Button */}
         <div className="p-4">
           <button
+            type="button"
+            data-testid="nav-upload-btn"
             onClick={() => navigate('/upload')}
-            className={`flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground py-2.5 font-medium shadow hover:bg-primary/90 transition-colors w-full ${
+            className={cn(
+              'flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground py-2.5 font-semibold text-sm shadow-md hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/20 active:scale-[0.98] transition-all w-full min-h-[44px]',
               isCollapsed ? 'px-0' : 'px-4'
-            }`}
+            )}
           >
             <Upload className="h-4 w-4 shrink-0" />
             {!isCollapsed && <span>New Upload</span>}
           </button>
         </div>
 
-        {/* Navigation Links */}
-        <nav className="flex-1 space-y-1.5 px-3 py-2">
+        {/* Navigation Section */}
+        <div className="px-4 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+          {!isCollapsed && 'Workspace'}
+        </div>
+        <nav className="flex-1 space-y-1 px-3 py-1">
           {navLinks.map((link) => {
             const Icon = link.icon;
             return (
@@ -164,28 +191,33 @@ export function AppShell() {
                 key={link.to}
                 to={link.to}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  cn(
+                    'flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all duration-150 min-h-[44px]',
                     isActive
-                      ? 'bg-primary/10 text-primary dark:bg-primary/20'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  } ${isCollapsed ? 'justify-center' : ''}`
+                      ? 'bg-primary/15 text-primary font-semibold shadow-sm border border-primary/20 backdrop-blur-sm'
+                      : 'text-muted-foreground hover:bg-white/10 hover:text-foreground',
+                    isCollapsed && 'justify-center'
+                  )
                 }
                 title={isCollapsed ? link.label : undefined}
               >
-                <Icon className="h-5 w-5 shrink-0" />
+                <Icon className="h-4 w-4 shrink-0" />
                 {!isCollapsed && <span>{link.label}</span>}
               </NavLink>
             );
           })}
         </nav>
 
-        {/* Shortcuts button */}
-        <div className="px-3 py-2 border-t border-border">
+        {/* Shortcuts & Preferences */}
+        <div className="px-3 py-2 border-t border-white/10 space-y-1">
           <button
+            type="button"
+            data-testid="keyboard-shortcuts-trigger"
             onClick={() => setShortcutsOpen(true)}
-            className={`flex items-center gap-3 w-full rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground ${
-              isCollapsed ? 'justify-center' : ''
-            }`}
+            className={cn(
+              'flex items-center gap-3 w-full rounded-xl px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-white/10 hover:text-foreground transition-colors min-h-[40px]',
+              isCollapsed && 'justify-center'
+            )}
             title="Keyboard Shortcuts (?)"
           >
             <Keyboard className="h-4 w-4 shrink-0" />
@@ -194,7 +226,7 @@ export function AppShell() {
         </div>
 
         {/* User profile footer */}
-        <div className="flex items-center gap-3 border-t border-border p-4">
+        <div className="flex items-center gap-3 border-t border-white/10 p-3.5">
           <Avatar name={user?.email || 'User'} size="sm" />
           {!isCollapsed && (
             <div className="flex-1 min-w-0">
@@ -203,9 +235,11 @@ export function AppShell() {
           )}
           {!isCollapsed && (
             <button
+              type="button"
+              data-testid="logout-button"
               onClick={logout}
               title="Sign out"
-              className="p-1 rounded-md text-muted-foreground hover:bg-muted hover:text-destructive transition-colors"
+              className="p-1.5 rounded-lg text-muted-foreground hover:bg-white/10 hover:text-destructive transition-colors"
             >
               <LogOut className="h-4 w-4" />
             </button>
@@ -213,66 +247,87 @@ export function AppShell() {
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-        {/* Top Navbar */}
-        <header className="flex h-16 items-center justify-between border-b border-border bg-card px-4 sm:px-6 shrink-0 gap-4">
+      {/* Main Content Viewport */}
+      <div className="flex flex-1 flex-col overflow-hidden min-w-0 z-20">
+        {/* Dynamic Condensed Top Bar */}
+        <header
+          className={cn(
+            'flex items-center justify-between border-b border-white/10 glass-panel px-4 sm:px-6 shrink-0 gap-4 transition-all duration-200 z-30',
+            isScrolled ? 'h-14 backdrop-blur-xl bg-background/80 shadow-md' : 'h-16 bg-background/40 backdrop-blur-md'
+          )}
+        >
           <div className="flex items-center gap-3">
-            {/* Mobile Hamburger Button */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2 rounded-md text-muted-foreground hover:bg-muted md:hidden"
-              aria-label="Toggle Navigation Menu"
-            >
-              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
+            {/* Mobile Brand Icon */}
+            <div className="md:hidden flex items-center">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground font-black text-xs shadow">
+                MS
+              </div>
+            </div>
 
             {/* Quick search button */}
             <button
+              type="button"
+              data-testid="command-palette-trigger"
               onClick={() => setCmdOpen(true)}
-              className="flex items-center gap-2 rounded-lg border border-input bg-background/50 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors w-44 sm:w-64"
+              className="flex items-center gap-2 rounded-xl border border-white/15 bg-background/50 backdrop-blur-sm px-3.5 py-2 text-xs text-muted-foreground hover:bg-white/15 hover:text-foreground transition-all w-36 sm:w-64 min-h-[36px]"
             >
               <Search className="h-3.5 w-3.5 shrink-0" />
               <span className="flex-1 text-left truncate">Search or commands...</span>
-              <kbd className="hidden sm:inline-block rounded border bg-muted px-1.5 py-0.5 text-[10px] font-mono">
+              <kbd className="hidden sm:inline-block rounded-md border border-white/20 bg-muted/40 px-1.5 py-0.5 text-[10px] font-mono">
                 ⌘K
               </kbd>
             </button>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Theme Toggle */}
+            {/* Theme & Palette Switcher */}
+            <ThemeSwitcher variant="compact" />
+
+            {/* Direct Theme Toggle button for test suite compatibility */}
             <button
+              type="button"
               data-testid="theme-toggle"
               onClick={toggleTheme}
-              className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="p-2 rounded-xl text-muted-foreground hover:bg-white/10 hover:text-foreground transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
               title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
             >
-              {resolvedTheme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
 
-            {/* Mobile user signout icon */}
+            {/* Mobile Hamburger menu */}
             <button
+              type="button"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 rounded-xl text-muted-foreground hover:bg-white/10 md:hidden min-w-[40px] min-h-[40px] flex items-center justify-center"
+              aria-label="Toggle Navigation Menu"
+            >
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+
+            {/* Sign out button */}
+            <button
+              type="button"
               onClick={logout}
-              className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive md:hidden"
+              className="p-2 rounded-xl text-muted-foreground hover:bg-white/10 hover:text-destructive md:hidden min-w-[40px] min-h-[40px] flex items-center justify-center"
               title="Sign out"
             >
-              <LogOut className="h-5 w-5" />
+              <LogOut className="h-4 w-4" />
             </button>
           </div>
         </header>
 
-        {/* Mobile slide-over navigation drawer */}
+        {/* Mobile Slide-Over Menu */}
         {mobileMenuOpen && (
-          <div className="fixed inset-0 top-16 z-40 bg-black/50 md:hidden animate-in fade-in-0">
-            <div className="h-full w-64 bg-card border-r border-border p-4 flex flex-col justify-between animate-in slide-in-from-left duration-200">
+          <div className="fixed inset-0 top-16 z-50 bg-black/60 backdrop-blur-md md:hidden animate-in fade-in-0">
+            <div className="h-full w-72 glass-panel border-r border-white/20 p-5 flex flex-col justify-between animate-in slide-in-from-left duration-200">
               <div className="space-y-4">
                 <button
+                  type="button"
                   onClick={() => {
                     navigate('/upload');
                     setMobileMenuOpen(false);
                   }}
-                  className="flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground py-2.5 font-medium shadow w-full"
+                  className="flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground py-3 font-semibold shadow-lg w-full min-h-[44px]"
                 >
                   <Upload className="h-4 w-4" />
                   <span>New Upload</span>
@@ -287,11 +342,12 @@ export function AppShell() {
                         to={link.to}
                         onClick={() => setMobileMenuOpen(false)}
                         className={({ isActive }) =>
-                          `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                          cn(
+                            'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors min-h-[44px]',
                             isActive
-                              ? 'bg-primary/10 text-primary dark:bg-primary/20'
-                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                          }`
+                              ? 'bg-primary/15 text-primary font-semibold shadow-sm'
+                              : 'text-muted-foreground hover:bg-white/10 hover:text-foreground'
+                          )
                         }
                       >
                         <Icon className="h-5 w-5 shrink-0" />
@@ -302,14 +358,15 @@ export function AppShell() {
                 </nav>
               </div>
 
-              <div className="border-t border-border pt-4">
-                <div className="flex items-center gap-3 mb-3">
+              <div className="border-t border-white/10 pt-4">
+                <div className="flex items-center gap-3 mb-4">
                   <Avatar name={user?.email || 'User'} size="sm" />
                   <p className="truncate text-xs font-semibold text-foreground">{user?.email}</p>
                 </div>
                 <button
+                  type="button"
                   onClick={logout}
-                  className="flex items-center gap-2 w-full text-xs text-destructive hover:underline"
+                  className="flex items-center gap-2 w-full text-xs text-destructive hover:underline py-2"
                 >
                   <LogOut className="h-4 w-4" />
                   <span>Sign out</span>
@@ -319,10 +376,82 @@ export function AppShell() {
           </div>
         )}
 
-        {/* Page Content Viewport */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        {/* Main Content Area */}
+        <main
+          ref={contentRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-28 md:pb-8"
+        >
           <Outlet />
         </main>
+      </div>
+
+      {/* Mobile Floating macOS Glass Dock */}
+      <div className="md:hidden fixed bottom-3 left-3 right-3 z-40 max-w-sm mx-auto flex items-center justify-around py-1.5 px-3 rounded-3xl glass-dock shadow-2xl border border-white/25">
+        <NavLink
+          to="/dashboard"
+          data-testid="nav-dashboard"
+          className={({ isActive }) =>
+            cn(
+              'flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all',
+              isActive ? 'text-primary scale-110 font-bold' : 'text-muted-foreground hover:text-foreground'
+            )
+          }
+        >
+          <LayoutDashboard className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Home</span>
+        </NavLink>
+
+        <NavLink
+          to="/meetings"
+          data-testid="nav-meetings"
+          className={({ isActive }) =>
+            cn(
+              'flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all',
+              isActive ? 'text-primary scale-110 font-bold' : 'text-muted-foreground hover:text-foreground'
+            )
+          }
+        >
+          <Calendar className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Notes</span>
+        </NavLink>
+
+        {/* Upload Action (Prominent Dock Center) */}
+        <NavLink
+          to="/upload"
+          data-testid="nav-upload"
+          className="flex items-center justify-center w-12 h-12 -mt-4 rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 active:scale-95 transition-transform"
+        >
+          <Plus className="w-6 h-6" />
+        </NavLink>
+
+        <NavLink
+          to="/action-items"
+          data-testid="nav-action-items"
+          className={({ isActive }) =>
+            cn(
+              'flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all',
+              isActive ? 'text-primary scale-110 font-bold' : 'text-muted-foreground hover:text-foreground'
+            )
+          }
+        >
+          <CheckSquare className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Tasks</span>
+        </NavLink>
+
+        <NavLink
+          to="/settings"
+          data-testid="nav-settings"
+          className={({ isActive }) =>
+            cn(
+              'flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all',
+              isActive ? 'text-primary scale-110 font-bold' : 'text-muted-foreground hover:text-foreground'
+            )
+          }
+        >
+          <Settings className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Settings</span>
+        </NavLink>
       </div>
 
       {/* Global Modals */}
