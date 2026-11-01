@@ -47,6 +47,8 @@ class FasterWhisperTranscriber:
                 settings.WHISPER_MODEL,
                 device=settings.WHISPER_DEVICE,
                 compute_type=settings.WHISPER_COMPUTE_TYPE,
+                cpu_threads=1,
+                num_workers=1,
             )
             cls._model_name = settings.WHISPER_MODEL
         return cls._model_instance

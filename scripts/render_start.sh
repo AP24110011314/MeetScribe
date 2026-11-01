@@ -7,8 +7,16 @@ set -e
 export PATH="$HOME/bin:$PATH"
 cd backend
 
-echo "==> Starting Celery Worker + Beat Scheduler in background..."
-celery -A app.workers.celery_app worker --beat --loglevel=info --pool=solo &
+start_celery() {
+  while true; do
+    echo "==> Starting Celery Worker + Beat Scheduler in background..."
+    celery -A app.workers.celery_app worker --beat --loglevel=info --pool=solo
+    echo "==> Celery stopped. Restarting in 3 seconds..."
+    sleep 3
+  done
+}
+
+start_celery &
 CELERY_PID=$!
 
 # Forward shutdown signals cleanly

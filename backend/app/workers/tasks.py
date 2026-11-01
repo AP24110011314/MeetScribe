@@ -206,13 +206,25 @@ def process_meeting(self: Task, meeting_id_str: str) -> dict[str, Any]:
 
             for idx, (chunk_path, offset_sec) in enumerate(chunks):
                 logger.info(
-                    "Transcribing chunk %d/%d (offset %.1fs): %s",
+                    "Meeting %s: Transcribing chunk %d/%d (offset %.1fs): %s",
+                    meeting_id_str,
                     idx + 1,
                     num_chunks,
                     offset_sec,
                     chunk_path.name,
                 )
+                chunk_t0 = datetime.now()
                 result = transcriber.transcribe(chunk_path)
+                elapsed_sec = (datetime.now() - chunk_t0).total_seconds()
+                logger.info(
+                    "Meeting %s: Chunk %d/%d transcribed successfully in %.1fs (%d chars, %d segments)",
+                    meeting_id_str,
+                    idx + 1,
+                    num_chunks,
+                    elapsed_sec,
+                    len(result.full_text),
+                    len(result.segments),
+                )
                 chunk_results.append((result, offset_sec))
 
                 # Progress increments from 30% to 70% across chunks

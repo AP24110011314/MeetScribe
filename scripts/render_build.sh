@@ -36,6 +36,10 @@ else
   echo "Notice: DATABASE_URL not set during build phase. Skipping migrations (run at startup or ensure db is linked)."
 fi
 
+# 4. Pre-download Whisper model into build cache
+echo "--> Pre-downloading Whisper tiny model for fast startup..."
+python -c "from faster_whisper import WhisperModel; WhisperModel('tiny', device='cpu', compute_type='int8')" || echo "Notice: Whisper pre-download skipped or will occur on first run."
+
 echo "=========================================================="
 echo "Build finished successfully!"
 echo "=========================================================="

@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     MAX_UPLOAD_MB: int = 500
 
     TRANSCRIBER: str = "faster_whisper"  # "faster_whisper", "openai", "fake"
-    WHISPER_MODEL: str = "small"
+    WHISPER_MODEL: str = "tiny"
     WHISPER_DEVICE: str = "cpu"
     WHISPER_COMPUTE_TYPE: str = "int8"
 
@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     LLM_MODEL: str = "gemini-2.5-flash"
 
-    REAPER_STALE_MINUTES: int = 15
+    REAPER_STALE_MINUTES: int = 5
     MAX_PROCESS_ATTEMPTS: int = 3
 
     @property
