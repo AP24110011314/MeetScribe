@@ -726,15 +726,32 @@ export function UploadPage() {
               <div className="flex justify-between text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <span className="flex items-center gap-2">
                   <FileAudio className="h-4 w-4 text-primary" />
-                  Pipeline Progress
+                  {activeItem.status === 'uploading'
+                    ? '1. Uploading Audio to Storage'
+                    : '2. AI Transcription & Processing Pipeline'}
                 </span>
                 <span className="font-mono tabular-nums text-foreground">
                   {activeItem.status === 'uploading'
-                    ? `${activeItem.progress}% (Uploading)`
-                    : `${currentPercent}%`}
+                    ? `${activeItem.progress}% (Upload)`
+                    : `${currentPercent}% (AI Processing)`}
                 </span>
               </div>
               <ProgressBar value={currentPercent} />
+
+              {/* Contextual Status Sub-label */}
+              <div className="text-xs text-muted-foreground flex items-center justify-between pt-1">
+                <span>
+                  {activeItem.status === 'uploading'
+                    ? 'Transferring file directly to cloud storage...'
+                    : currentPercent <= 25
+                    ? 'Audio received. Normalizing audio with ffmpeg...'
+                    : currentPercent <= 70
+                    ? 'Transcribing speech to text with Whisper AI (this takes 1-2 minutes on first run)...'
+                    : currentPercent <= 90
+                    ? 'Extracting summary, decisions, and action items with Gemini AI...'
+                    : 'Finalizing meeting notes and indexing for search...'}
+                </span>
+              </div>
             </div>
 
             {/* Glowing Active Step Tracker (U06) */}

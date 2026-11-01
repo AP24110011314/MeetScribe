@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     MAX_UPLOAD_MB: int = 500
 
     TRANSCRIBER: str = "faster_whisper"  # "faster_whisper", "openai", "fake"
-    WHISPER_MODEL: str = "small"
+    WHISPER_MODEL: str = "tiny"
     WHISPER_DEVICE: str = "cpu"
     WHISPER_COMPUTE_TYPE: str = "int8"
 
