@@ -245,10 +245,10 @@ class GeminiLLMClient:
                     and "no longer available" in err_message
                 ):
                     logger.warning(
-                        "Gemini model %s is no longer available to new users. Falling back to gemini-3.5-flash-lite",
+                        "Gemini model %s is no longer available to new users. Falling back to gemini-3.5-flash",
                         self.model,
                     )
-                    self.model = "gemini-3.5-flash-lite"
+                    self.model = "gemini-3.5-flash"
                     continue
 
                 # Non-transient errors: Invalid key, authentication, quota exceeded

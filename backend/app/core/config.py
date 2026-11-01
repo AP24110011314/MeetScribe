@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = "gemini"  # "gemini", "anthropic", "fake"
     LLM_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
-    LLM_MODEL: str = "gemini-2.5-flash"
+    LLM_MODEL: str = "gemini-3.5-flash"
 
     REAPER_STALE_MINUTES: int = 5
     MAX_PROCESS_ATTEMPTS: int = 3

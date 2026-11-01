@@ -10,7 +10,7 @@ cd backend
 start_celery() {
   while true; do
     echo "==> Starting Celery Worker + Beat Scheduler in background..."
-    celery -A app.workers.celery_app worker --beat --loglevel=info --pool=solo
+    celery -A app.workers.celery_app worker --beat --loglevel=info --pool=solo || true
     echo "==> Celery stopped. Restarting in 3 seconds..."
     sleep 3
   done

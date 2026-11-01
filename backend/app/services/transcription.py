@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 from typing import Any, List, Optional, Protocol, Tuple
@@ -225,9 +226,83 @@ def merge_chunk_transcripts(
     )
 
 
+class GeminiTranscriber:
+    def __init__(self, api_key: Optional[str] = None) -> None:
+        self.api_key = api_key or settings.effective_llm_api_key
+
+    def transcribe(self, wav_path: Path, language: Optional[str] = None) -> TranscriptResult:
+        try:
+            from google import genai
+            from google.genai import types
+        except ImportError as e:
+            raise RuntimeError("google-genai package is required for GeminiTranscriber") from e
+
+        if not self.api_key:
+            raise ValueError("Gemini API key is required for GeminiTranscriber.")
+
+        client = genai.Client(api_key=self.api_key)
+        uploaded = client.files.upload(file=str(wav_path))
+        try:
+            prompt = (
+                "Provide an accurate, verbatim transcript of this audio recording. "
+                "Return ONLY valid JSON conforming exactly to this schema:\n"
+                "{\n"
+                '  "language": "en",\n'
+                '  "full_text": "entire transcription text",\n'
+                '  "segments": [\n'
+                '    {"id": 0, "start": 0.0, "end": 2.5, "text": "spoken words"}\n'
+                "  ]\n"
+                "}"
+            )
+            if language:
+                prompt += f"\nThe primary language spoken in this audio is '{language}'."
+
+            model_name = (
+                settings.LLM_MODEL
+                if ("gemini" in settings.LLM_MODEL and "2.5-flash" not in settings.LLM_MODEL)
+                else "gemini-3.5-flash"
+            )
+            resp = client.models.generate_content(
+                model=model_name,
+                contents=[uploaded, prompt],  # type: ignore[arg-type]
+                config=types.GenerateContentConfig(response_mime_type="application/json"),
+            )
+            raw = resp.text or "{}"
+            data = json.loads(raw)
+            segments = [
+                Segment(
+                    id=s.get("id", idx),
+                    start=round(float(s.get("start", 0.0)), 2),
+                    end=round(float(s.get("end", 0.0)), 2),
+                    text=str(s.get("text", "")).strip(),
+                )
+                for idx, s in enumerate(data.get("segments", []))
+            ]
+            return TranscriptResult(
+                language=data.get("language", language or "en"),
+                full_text=data.get("full_text", " ".join(s.text for s in segments)),
+                segments=segments,
+            )
+        finally:
+            try:
+                if uploaded and uploaded.name:
+                    client.files.delete(name=uploaded.name)
+            except Exception:
+                pass
+
+
 def get_transcriber() -> Transcriber:
     if settings.TRANSCRIBER == "fake":
         return FakeTranscriber()
     if settings.TRANSCRIBER == "openai":
         return OpenAITranscriber()
+    if settings.TRANSCRIBER == "gemini":
+        return GeminiTranscriber()
+
+    # In production on memory-constrained servers (e.g. Render Free Tier 512MB RAM),
+    # local faster-whisper CPU inference causes OOM crashes or hangs indefinitely.
+    # If a Gemini key is present, use zero-RAM cloud GeminiTranscriber.
+    if settings.ENV != "development" and settings.effective_llm_api_key:
+        return GeminiTranscriber()
+
     return FasterWhisperTranscriber()
