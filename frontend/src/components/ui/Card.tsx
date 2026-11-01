@@ -1,11 +1,20 @@
 import React, { forwardRef } from 'react';
 import { cn } from '@/lib/utils';
 
-export const Card = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
+export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  glass?: boolean;
+}
+
+export const Card = forwardRef<HTMLDivElement, CardProps>(
+  ({ className, glass = true, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('rounded-xl border bg-card text-card-foreground shadow-sm', className)}
+      className={cn(
+        glass
+          ? 'glass-card'
+          : 'rounded-2xl border bg-card text-card-foreground shadow-sm',
+        className
+      )}
       {...props}
     />
   )
@@ -23,7 +32,7 @@ export const CardTitle = forwardRef<HTMLParagraphElement, React.HTMLAttributes<H
   ({ className, ...props }, ref) => (
     <h3
       ref={ref}
-      className={cn('font-semibold leading-none tracking-tight text-lg', className)}
+      className={cn('font-semibold leading-tight tracking-tight text-lg text-foreground', className)}
       {...props}
     />
   )
@@ -50,4 +59,3 @@ export const CardFooter = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
   )
 );
 CardFooter.displayName = 'CardFooter';
-

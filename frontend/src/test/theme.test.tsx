@@ -3,11 +3,12 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { ThemeProvider, useTheme } from '@/context/ThemeContext';
 
 function ThemeConsumer() {
-  const { theme, resolvedTheme, setTheme, toggleTheme } = useTheme();
+  const { theme, resolvedTheme, setTheme, toggleTheme, palette, setPalette } = useTheme();
   return (
     <div>
       <span data-testid="current-theme">{theme}</span>
       <span data-testid="resolved-theme">{resolvedTheme}</span>
+      <span data-testid="current-palette">{palette}</span>
       <button data-testid="toggle-btn" onClick={toggleTheme}>
         Toggle
       </button>
@@ -19,6 +20,12 @@ function ThemeConsumer() {
       </button>
       <button data-testid="set-system-btn" onClick={() => setTheme('system')}>
         Set System
+      </button>
+      <button data-testid="set-sunset-btn" onClick={() => setPalette('sunset')}>
+        Set Sunset
+      </button>
+      <button data-testid="set-ocean-btn" onClick={() => setPalette('ocean')}>
+        Set Ocean
       </button>
     </div>
   );
@@ -87,5 +94,34 @@ describe('Theme System (U01)', () => {
     expect(screen.getByTestId('current-theme')).toHaveTextContent('dark');
     expect(screen.getByTestId('resolved-theme')).toHaveTextContent('dark');
     expect(document.documentElement.classList.contains('dark')).toBe(true);
+  });
+
+  it('defaults to aurora palette and updates on change', () => {
+    render(
+      <ThemeProvider>
+        <ThemeConsumer />
+      </ThemeProvider>
+    );
+
+    expect(screen.getByTestId('current-palette')).toHaveTextContent('aurora');
+    expect(document.documentElement.getAttribute('data-palette')).toBe('aurora');
+
+    fireEvent.click(screen.getByTestId('set-sunset-btn'));
+    expect(screen.getByTestId('current-palette')).toHaveTextContent('sunset');
+    expect(document.documentElement.getAttribute('data-palette')).toBe('sunset');
+    expect(localStorage.getItem('meetscribe_palette')).toBe('sunset');
+  });
+
+  it('restores saved palette from localStorage', () => {
+    localStorage.setItem('meetscribe_palette', 'ocean');
+
+    render(
+      <ThemeProvider>
+        <ThemeConsumer />
+      </ThemeProvider>
+    );
+
+    expect(screen.getByTestId('current-palette')).toHaveTextContent('ocean');
+    expect(document.documentElement.getAttribute('data-palette')).toBe('ocean');
   });
 });
