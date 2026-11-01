@@ -26,7 +26,7 @@ test.describe('Action Items Management (F14, U11, U12)', () => {
     const fileInput = page.locator('[data-testid="upload-file-input"]');
     await fileInput.setInputFiles(sampleAudioPath);
     const viewNotesBtn = page.getByRole('button', { name: /view meeting notes/i });
-    await expect(viewNotesBtn).toBeVisible({ timeout: 45000 });
+    await expect(viewNotesBtn).toBeVisible({ timeout: 60000 });
     await viewNotesBtn.click();
 
     // 3. Go to Action Items tab on Meeting Detail

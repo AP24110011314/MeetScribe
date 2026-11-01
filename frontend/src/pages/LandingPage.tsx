@@ -1,13 +1,15 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Mic, FileText, CheckCircle, ArrowRight, Sparkles, Cpu, Lock } from 'lucide-react';
+import { Mic, FileText, CheckCircle, ArrowRight, Sparkles, Cpu, Lock, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ThemeSwitcher } from '@/components/ui/ThemeSwitcher';
 import { GradientMeshBackground } from '@/components/ui/GradientMeshBackground';
 import { LiveProductPreview } from '@/components/LiveProductPreview';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 
 export function LandingPage() {
   const { isAuthenticated } = useAuth();
+  const { resolvedTheme, toggleTheme } = useTheme();
   const navigate = useNavigate();
 
   return (
@@ -27,6 +29,16 @@ export function LandingPage() {
 
           <div className="flex items-center gap-3">
             <ThemeSwitcher variant="compact" />
+
+            {/* Testid theme toggle */}
+            <button
+              data-testid="theme-toggle"
+              onClick={toggleTheme}
+              className="p-2 rounded-xl text-muted-foreground hover:bg-white/10 hover:text-foreground transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
+              title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+            >
+              {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
 
             {isAuthenticated ? (
               <Button onClick={() => navigate('/dashboard')} className="shadow-md">
