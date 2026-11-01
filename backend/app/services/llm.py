@@ -1,7 +1,7 @@
 import json
 import logging
 import re
-from typing import List, Optional, Protocol, Type, TypeVar
+from typing import Any, List, Optional, Protocol, Type, TypeVar
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -139,6 +139,175 @@ class AnthropicClient:
             ) from second_err
 
 
+class GeminiLLMClient:
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        model: Optional[str] = None,
+    ) -> None:
+        self.api_key = api_key or settings.effective_llm_api_key
+        self.model = model or settings.LLM_MODEL
+        if not self.api_key:
+            raise ValueError(
+                "Gemini API key is required. Set LLM_API_KEY (or GEMINI_API_KEY) in .env"
+            )
+
+    def _call_gemini_with_retry(
+        self,
+        client: Any,
+        prompt: str,
+        system: str,
+        schema: Type[T],
+    ) -> str:
+        import time
+
+        from google.genai import errors, types
+
+        max_attempts = 4
+        delay = 1.0
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                config = types.GenerateContentConfig(
+                    system_instruction=system,
+                    response_mime_type="application/json",
+                    response_schema=schema,
+                )
+                logger.info(
+                    "Calling Gemini model %s (attempt %d/%d)",
+                    self.model,
+                    attempt,
+                    max_attempts,
+                )
+                response = client.models.generate_content(
+                    model=self.model,
+                    contents=prompt,
+                    config=config,
+                )
+                text = response.text or ""
+                if not text.strip():
+                    raise ValueError("Gemini returned empty response text")
+                return text
+
+            except errors.APIError as api_err:
+                status_code = getattr(api_err, "code", None) or getattr(
+                    api_err, "status_code", None
+                )
+                err_message = str(api_err)
+
+                # If gemini-2.5-flash is 404 (deprecated by Google for new users) -> fallback
+                if (
+                    status_code == 404
+                    and "gemini-2.5-flash" in self.model
+                    and "no longer available" in err_message
+                ):
+                    logger.warning(
+                        "Gemini model %s is no longer available to new users. Falling back to gemini-3.5-flash-lite",
+                        self.model,
+                    )
+                    self.model = "gemini-3.5-flash-lite"
+                    continue
+
+                # Non-transient errors: Invalid key, authentication, quota exceeded
+                if (
+                    status_code in (400, 401, 403)
+                    or "API_KEY_INVALID" in err_message
+                    or "UNAUTHENTICATED" in err_message
+                ):
+                    raise ValueError(
+                        "Gemini API authentication failed: Invalid or missing API key."
+                    ) from api_err
+
+                if "RESOURCE_EXHAUSTED" in err_message or "quota" in err_message.lower():
+                    if attempt == max_attempts:
+                        raise ValueError(
+                            "Gemini API rate limit or quota exceeded. Please try again later."
+                        ) from api_err
+
+                # Transient errors: 429 rate limit or 5xx server errors
+                if status_code in (429, 500, 502, 503, 504) or (status_code and status_code >= 500):
+                    if attempt < max_attempts:
+                        logger.warning(
+                            "Transient Gemini API error (status=%s, attempt=%d/%d). Retrying in %.1fs... Error: %s",
+                            status_code,
+                            attempt,
+                            max_attempts,
+                            delay,
+                            api_err,
+                        )
+                        time.sleep(delay)
+                        delay *= 2
+                        continue
+                    raise ValueError(
+                        f"Gemini API unavailable after {max_attempts} retries: {err_message}"
+                    ) from api_err
+
+                raise ValueError(f"Gemini API error: {err_message}") from api_err
+
+            except Exception as ex:
+                if attempt < max_attempts and isinstance(
+                    ex, (ConnectionError, TimeoutError, OSError)
+                ):
+                    logger.warning(
+                        "Network error calling Gemini: %s. Retrying in %.1fs...", ex, delay
+                    )
+                    time.sleep(delay)
+                    delay *= 2
+                    continue
+                raise
+
+        raise RuntimeError(f"Gemini API call failed after {max_attempts} attempts")
+
+    def complete_json(
+        self,
+        system: str,
+        user: str,
+        schema: Type[T],
+    ) -> T:
+        try:
+            from google import genai
+        except ImportError as e:
+            raise RuntimeError("google-genai package is required for GeminiLLMClient") from e
+
+        client = genai.Client(api_key=self.api_key)
+
+        raw_text = self._call_gemini_with_retry(client, user, system, schema)
+
+        # 1. Attempt initial parse and Pydantic validation
+        validation_err_msg = ""
+        try:
+            json_str = extract_json_payload(raw_text)
+            data = json.loads(json_str)
+            return schema.model_validate(data)
+        except (json.JSONDecodeError, ValidationError) as first_err:
+            validation_err_msg = str(first_err)
+            logger.warning(
+                "Initial Gemini response failed validation (%s). Retrying once with error feedback...",
+                first_err,
+            )
+
+        # 2. Retry once with validation feedback per architecture guidelines
+        retry_prompt = (
+            f"{user}\n\n"
+            f"Your previous output failed validation with the following error:\n"
+            f"{validation_err_msg}\n\n"
+            f"Previous Output:\n"
+            f"{raw_text}\n\n"
+            f"Please fix the error and output only valid JSON conforming strictly to the schema."
+        )
+
+        retry_raw = self._call_gemini_with_retry(client, retry_prompt, system, schema)
+        try:
+            json_str2 = extract_json_payload(retry_raw)
+            data2 = json.loads(json_str2)
+            return schema.model_validate(data2)
+        except (json.JSONDecodeError, ValidationError) as second_err:
+            logger.error("Gemini JSON completion failed on retry: %s", second_err)
+            raise ValueError(
+                f"LLM JSON schema validation failed after retry: {second_err}"
+            ) from second_err
+
+
 class FakeLLMClient:
     """
     Deterministic mock client for unit testing and offline pipeline execution.
@@ -174,6 +343,55 @@ class FakeLLMClient:
                             "due_date": "2026-11-06",
                             "priority": "high",
                             "source_start_sec": 6.56,
+                        }
+                    ],
+                }
+            )
+
+        # Dynamic responses based on keywords in transcript
+        user_lower = user.lower()
+        if "apollo" in user_lower:
+            return schema.model_validate(
+                {
+                    "suggested_title": "Project Apollo Mission Sync",
+                    "summary": "The team met to review Project Apollo mission parameters and rocket fuel budget deadlines.",
+                    "key_points": [
+                        "Apollo mission launch scheduled for late December.",
+                        "Rocket fuel budget review required by Wednesday.",
+                    ],
+                    "decisions": [
+                        "Alice will review the rocket fuel budget by Wednesday.",
+                    ],
+                    "action_items": [
+                        {
+                            "description": "Review the rocket fuel budget",
+                            "owner": "Alice",
+                            "due_date": "2026-12-02",
+                            "priority": "high",
+                            "source_start_sec": 5.0,
+                        }
+                    ],
+                }
+            )
+        elif "marketing" in user_lower:
+            return schema.model_validate(
+                {
+                    "suggested_title": "International Marketing Review",
+                    "summary": "The international marketing team reviewed campaign rollout timelines and agency coordination.",
+                    "key_points": [
+                        "International marketing rollout kickoff.",
+                        "Advertising agency contact deadline next Monday.",
+                    ],
+                    "decisions": [
+                        "Bob to contact advertising agency.",
+                    ],
+                    "action_items": [
+                        {
+                            "description": "Contact the advertising agency",
+                            "owner": "Bob",
+                            "due_date": "2026-11-09",
+                            "priority": "medium",
+                            "source_start_sec": 4.0,
                         }
                     ],
                 }
@@ -234,4 +452,8 @@ class FakeLLMClient:
 def get_llm_client() -> LLMClient:
     if settings.LLM_PROVIDER == "fake":
         return FakeLLMClient()
-    return AnthropicClient()
+    if settings.LLM_PROVIDER == "anthropic":
+        return AnthropicClient()
+    if settings.LLM_PROVIDER == "gemini":
+        return GeminiLLMClient()
+    return GeminiLLMClient()

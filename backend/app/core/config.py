@@ -47,12 +47,17 @@ class Settings(BaseSettings):
     WHISPER_DEVICE: str = "cpu"
     WHISPER_COMPUTE_TYPE: str = "int8"
 
-    LLM_PROVIDER: str = "anthropic"  # "anthropic", "fake"
+    LLM_PROVIDER: str = "gemini"  # "gemini", "anthropic", "fake"
     LLM_API_KEY: str = ""
-    LLM_MODEL: str = "claude-sonnet-5-5"
+    GEMINI_API_KEY: str = ""
+    LLM_MODEL: str = "gemini-2.5-flash"
 
     REAPER_STALE_MINUTES: int = 15
     MAX_PROCESS_ATTEMPTS: int = 3
+
+    @property
+    def effective_llm_api_key(self) -> str:
+        return self.LLM_API_KEY or self.GEMINI_API_KEY
 
     @field_validator("API_PORT")
     @classmethod

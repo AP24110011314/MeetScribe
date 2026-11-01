@@ -244,15 +244,16 @@ def check_whisper_cache() -> tuple[bool, str, str]:
 def check_llm_api_key() -> tuple[bool, str, str]:
     if not settings:
         return False, "Cannot load settings", "Check app/core/config.py"
-    if settings.LLM_PROVIDER == "anthropic":
-        if settings.LLM_API_KEY and settings.LLM_API_KEY.strip():
-            return True, "Anthropic LLM_API_KEY is configured", ""
+    if settings.LLM_PROVIDER in ("gemini", "anthropic"):
+        key = settings.effective_llm_api_key
+        if key and key.strip():
+            return True, f"{settings.LLM_PROVIDER.title()} LLM API key is configured", ""
         return (
             False,
-            "LLM_PROVIDER=anthropic but LLM_API_KEY is empty",
-            "Set LLM_API_KEY in .env or set LLM_PROVIDER=fake for offline dev",
+            f"LLM_PROVIDER={settings.LLM_PROVIDER} but LLM_API_KEY is empty",
+            "Set LLM_API_KEY in .env",
         )
-    return True, f"LLM provider is '{settings.LLM_PROVIDER}' (no API key required)", ""
+    return True, f"LLM provider is '{settings.LLM_PROVIDER}'", ""
 
 
 def main() -> None:

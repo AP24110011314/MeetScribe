@@ -30,6 +30,7 @@ dependencies = [
     "reportlab>=4.1.0",
     "python-multipart>=0.0.9",
     "faster-whisper>=1.0.1",
+    "google-genai>=2.0.0",  # Official Google GenAI SDK for Gemini LLM analysis and structured output generation
     "anthropic>=0.21.0",
     "honcho>=1.1.0",
 ]

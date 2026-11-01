@@ -47,7 +47,7 @@ Details: `docs/ARCHITECTURE.md`.
 | Redis | 7 or newer | `redis-server --version` |
 | ffmpeg | 6 or newer | `ffmpeg -version` |
 | MinIO (optional) | any | `minio --version` |
-| LLM API key | Anthropic | needed for the analysis step |
+| LLM API key | Gemini | needed for the analysis step |
 
 RAM: 8 GB minimum; Whisper `small` needs about 2 GB free. Use `WHISPER_MODEL=base` on tight machines.
 
@@ -193,9 +193,9 @@ The full feature-by-feature test plan is in `docs/TESTING.md`.
 | `S3_BUCKET` / `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_REGION` | `meetscribe` / `minioadmin` / `minioadmin` / `us-east-1` | s3 mode | Bucket credentials |
 | `TRANSCRIBER` | `faster_whisper`, `openai`, `fake` | yes | Transcription provider |
 | `WHISPER_MODEL` | `small` | no | `tiny`, `base`, `small`, `medium` |
-| `LLM_PROVIDER` | `anthropic` or `fake` | yes | Analysis provider |
+| `LLM_PROVIDER` | `gemini`, `anthropic`, or `fake` | yes | Analysis provider |
 | `LLM_API_KEY` | your key | for real analysis | LLM credentials |
-| `LLM_MODEL` | `claude-sonnet-5-5` | no | Model name |
+| `LLM_MODEL` | `gemini-2.5-flash` | no | Model name |
 | `CORS_ORIGINS` | `http://localhost:5173` | yes | Allowed web origin |
 | `REAPER_STALE_MINUTES` | `15` | no | Idle time before a job is re-queued |
 
