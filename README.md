@@ -16,11 +16,15 @@ Runs directly on macOS (no Docker). API on **http://localhost:8000**, web app on
 - Crash recovery: stuck jobs are detected and re-queued automatically
 
 **Interface**
-- Light and dark themes, command palette (Cmd+K), keyboard shortcuts
-- Dashboard with stats and charts, animated upload queue, live processing step tracker
+- macOS Glass Design with animated gradient mesh and subtle noise grain overlay
+- 5 User-selectable palettes (Aurora, Sunset, Ocean, Forest, Midnight) in Light and Dark modes
+- macOS Finder sidebar on desktop and floating glass dock navigation on mobile
+- Command palette (Cmd+K), global keyboard shortcuts, and responsive touch targets (44px+)
+- Dashboard with glass stat cards, sparklines, and Recharts activity visualization
+- Animated upload dropzone and live processing step tracker
 - Meeting page with tabs, audio player with waveform and speed control, follow-along transcript with search
-- Action items in list or kanban view, global "My action items" page
-- Fully responsive and keyboard accessible
+- Action items in list or kanban board view, global "My action items" page
+- Fully responsive (360px to 1440px+) and keyboard accessible
 
 ## Architecture
 ```
