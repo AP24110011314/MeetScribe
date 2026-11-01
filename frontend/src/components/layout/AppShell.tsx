@@ -55,6 +55,40 @@ export function AppShell() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const notificationRef = useRef<HTMLDivElement>(null);
+
+  // Close notifications on route change
+  useEffect(() => {
+    setNotificationsOpen(false);
+  }, [location.pathname]);
+
+  // Close notifications on click-outside or Escape key
+  useEffect(() => {
+    if (!notificationsOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        notificationRef.current &&
+        !notificationRef.current.contains(event.target as Node)
+      ) {
+        setNotificationsOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setNotificationsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [notificationsOpen]);
 
   const loadNotifications = async () => {
     try {
@@ -348,13 +382,15 @@ export function AppShell() {
 
           <div className="flex items-center gap-2">
             {/* Notification Bell (Phase D: F36, U24) */}
-            <div className="relative">
+            <div className="relative" ref={notificationRef}>
               <button
                 type="button"
                 data-testid="notification-bell"
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
                 className="relative p-2 rounded-xl text-muted-foreground hover:bg-white/10 hover:text-foreground transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
                 title="Notifications"
+                aria-label="Notifications"
+                aria-expanded={notificationsOpen}
               >
                 <Bell className="h-4 w-4" />
                 {unreadNotifCount > 0 && (
@@ -364,7 +400,10 @@ export function AppShell() {
 
               {/* Notification Popover Dropdown */}
               {notificationsOpen && (
-                <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 rounded-2xl glass-card border border-white/20 shadow-2xl z-50 p-4 space-y-3">
+                <div
+                  data-testid="notifications-popover"
+                  className="absolute right-0 top-full mt-2 w-80 sm:w-96 rounded-2xl glass-card border border-white/20 shadow-2xl z-50 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-150"
+                >
                   <div className="flex items-center justify-between pb-2 border-b border-white/10">
                     <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
                       <Bell className="h-3.5 w-3.5 text-primary" />
@@ -375,16 +414,28 @@ export function AppShell() {
                         </span>
                       )}
                     </div>
-                    {unreadNotifCount > 0 && (
+                    <div className="flex items-center gap-2">
+                      {unreadNotifCount > 0 && (
+                        <button
+                          type="button"
+                          data-testid="notification-read-all"
+                          onClick={handleMarkAllNotificationsRead}
+                          className="text-[11px] text-primary hover:underline font-medium"
+                        >
+                          Mark all read
+                        </button>
+                      )}
                       <button
                         type="button"
-                        data-testid="notification-read-all"
-                        onClick={handleMarkAllNotificationsRead}
-                        className="text-[11px] text-primary hover:underline font-medium"
+                        data-testid="notification-close"
+                        onClick={() => setNotificationsOpen(false)}
+                        className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors"
+                        title="Close notifications"
+                        aria-label="Close notifications"
                       >
-                        Mark all read
+                        <X className="h-3.5 w-3.5" />
                       </button>
-                    )}
+                    </div>
                   </div>
 
                   <div className="max-h-72 overflow-y-auto space-y-2">

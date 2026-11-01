@@ -133,5 +133,18 @@ describe('Phase D: Account & Notifications (U24, U25)', () => {
     fireEvent.click(markAllBtn);
 
     expect(meetingApi.markAllNotificationsRead).toHaveBeenCalledTimes(1);
+
+    // 5. Close notifications with close button
+    const closeBtn = screen.getByTestId('notification-close');
+    fireEvent.click(closeBtn);
+
+    expect(screen.queryByTestId('notifications-popover')).not.toBeInTheDocument();
+
+    // 6. Open again and close with Escape key
+    fireEvent.click(bellBtn);
+    expect(screen.getByTestId('notifications-popover')).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByTestId('notifications-popover')).not.toBeInTheDocument();
   });
 });
