@@ -120,7 +120,20 @@ export async function apiFetch<T>(
     headers.set('Content-Type', 'application/json');
   }
 
-  let response = await fetch(url, { ...options, headers });
+  let signal = options.signal;
+  let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+  if (!signal && typeof AbortController !== 'undefined') {
+    const controller = new AbortController();
+    signal = controller.signal;
+    timeoutTimer = setTimeout(() => controller.abort(new Error('Request timed out')), 30000);
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(url, { ...options, headers, signal });
+  } finally {
+    if (timeoutTimer) clearTimeout(timeoutTimer);
+  }
 
   // If unauthorized and we have a refresh token, attempt token refresh once
   if (response.status === 401 && getRefreshToken() && !endpoint.includes('/auth/refresh') && !endpoint.includes('/auth/login')) {
@@ -169,7 +182,20 @@ export async function apiFetchBlob(
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  let response = await fetch(url, { ...options, headers });
+  let signal = options.signal;
+  let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+  if (!signal && typeof AbortController !== 'undefined') {
+    const controller = new AbortController();
+    signal = controller.signal;
+    timeoutTimer = setTimeout(() => controller.abort(new Error('Request timed out')), 60000);
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(url, { ...options, headers, signal });
+  } finally {
+    if (timeoutTimer) clearTimeout(timeoutTimer);
+  }
 
   if (response.status === 401 && getRefreshToken() && !endpoint.includes('/auth/refresh') && !endpoint.includes('/auth/login')) {
     try {

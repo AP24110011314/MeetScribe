@@ -17,8 +17,8 @@ export async function loginUser(email: string, password: string): Promise<AuthTo
   return tokens;
 }
 
-export async function getCurrentUser(): Promise<User> {
-  return apiFetch<User>('/auth/me');
+export async function getCurrentUser(options?: RequestInit): Promise<User> {
+  return apiFetch<User>('/auth/me', options);
 }
 
 export function logoutUser(): void {

@@ -28,10 +28,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const u = await getCurrentUser();
+      // 8-second timeout for initial auth check to avoid blocking page load if backend is cold-starting
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timeoutId = controller ? setTimeout(() => controller.abort(), 8000) : undefined;
+      const u = await getCurrentUser(controller ? { signal: controller.signal } : undefined);
+      if (timeoutId) clearTimeout(timeoutId);
       setUser(u);
     } catch {
-      logoutUser();
+      // On network timeout or auth failure, stop loading and fall back gracefully
       setUser(null);
     } finally {
       setIsLoading(false);
