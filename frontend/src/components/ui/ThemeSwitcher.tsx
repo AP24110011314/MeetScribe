@@ -111,7 +111,7 @@ export const ThemeSwitcher: React.FC<ThemeSwitcherProps> = ({ variant = 'compact
           data-testid="theme-switcher-trigger"
           aria-label="Customize theme & palette"
           className={cn(
-            'flex items-center justify-center w-9 h-9 rounded-xl glass-card-subtle border border-white/20 text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+            'flex items-center justify-center min-w-[44px] min-h-[44px] sm:min-w-[36px] sm:min-h-[36px] sm:w-9 sm:h-9 rounded-xl glass-card-subtle border border-white/20 text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary',
             className
           )}
         >

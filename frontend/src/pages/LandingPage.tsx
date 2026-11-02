@@ -34,7 +34,7 @@ export function LandingPage() {
             <button
               data-testid="theme-toggle"
               onClick={toggleTheme}
-              className="p-2 rounded-xl text-muted-foreground hover:bg-white/10 hover:text-foreground transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center"
+              className="p-2 rounded-xl text-muted-foreground hover:bg-white/10 hover:text-foreground transition-colors min-w-[44px] min-h-[44px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center"
               title={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
             >
               {resolvedTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}

@@ -108,26 +108,26 @@ export function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden flex flex-col justify-between px-4 py-6 sm:px-8">
+    <div className="min-h-[100dvh] w-full relative overflow-x-hidden overflow-y-auto flex flex-col justify-between px-3 py-3 sm:px-8 sm:py-6 overscroll-contain">
       {/* Mesh background */}
       <GradientMeshBackground />
 
       {/* Top Header / Switcher */}
-      <header className="w-full max-w-7xl mx-auto flex items-center justify-between z-20">
-        <Link to="/" className="inline-flex items-center gap-2.5 font-bold text-xl tracking-tight text-foreground group">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground font-black text-base shadow-lg shadow-primary/25 group-hover:scale-105 transition-transform">
+      <header className="w-full max-w-7xl mx-auto flex items-center justify-between z-20 shrink-0 py-1">
+        <Link to="/" className="inline-flex items-center gap-2 font-bold text-lg sm:text-xl tracking-tight text-foreground group min-h-[44px]">
+          <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground font-black text-sm sm:text-base shadow-lg shadow-primary/25 group-hover:scale-105 transition-transform">
             MS
           </div>
-          <span className="font-semibold text-lg">MeetScribe</span>
+          <span className="font-semibold text-base sm:text-lg">MeetScribe</span>
         </Link>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <ThemeSwitcher variant="compact" />
         </div>
       </header>
 
       {/* Main Split Layout */}
-      <main className="w-full max-w-7xl mx-auto my-auto py-8 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center z-10">
+      <main className="w-full max-w-7xl mx-auto my-auto py-3 sm:py-8 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center z-10">
         {/* Left column (Desktop Live Product Preview) */}
         <div className="hidden lg:flex lg:col-span-7 flex-col justify-center space-y-8 pr-6">
           <div className="space-y-4">
@@ -153,17 +153,17 @@ export function RegisterPage() {
             initial={{ opacity: 0, y: 16 }}
             animate={shakeKey > 0 ? { x: [-8, 8, -6, 6, -3, 3, 0], opacity: 1, y: 0 } : { opacity: 1, y: 0 }}
             transition={{ duration: shakeKey > 0 ? 0.4 : 0.3 }}
-            className="glass-card shadow-2xl border border-white/20 rounded-3xl overflow-hidden backdrop-blur-2xl"
+            className="glass-card shadow-2xl border border-white/20 rounded-2xl sm:rounded-3xl overflow-hidden backdrop-blur-2xl"
           >
             <WindowChrome
               title="Create Account"
               subtitle="Get Started Free"
             />
 
-            <div className="p-6 sm:p-8 space-y-6">
+            <div className="p-5 sm:p-8 space-y-5 sm:space-y-6">
               <div className="space-y-1 text-center sm:text-left">
-                <h2 className="text-2xl font-bold tracking-tight text-foreground">Sign up</h2>
-                <p className="text-sm text-muted-foreground">Enter your email and create a password</p>
+                <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Sign up</h2>
+                <p className="text-xs sm:text-sm text-muted-foreground">Enter your email and create a password</p>
               </div>
 
               <form data-testid="register-form" onSubmit={handleSubmit} className="space-y-4">
@@ -185,6 +185,10 @@ export function RegisterPage() {
                   <Input
                     id="reg-email"
                     type="email"
+                    inputMode="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     placeholder="name@example.com"
                     value={email}
                     onChange={(e) => {
@@ -194,7 +198,7 @@ export function RegisterPage() {
                     error={errors.email}
                     autoComplete="email"
                     disabled={isLoading}
-                    autoFocus
+                    autoFocus={typeof window !== 'undefined' && window.innerWidth >= 768}
                     startIcon={<Mail className="w-4 h-4" />}
                   />
                 </div>
@@ -223,7 +227,7 @@ export function RegisterPage() {
                           type="button"
                           aria-label={showPassword ? 'Hide password' : 'Show password'}
                           onClick={() => setShowPassword(!showPassword)}
-                          className="text-muted-foreground hover:text-foreground p-1 transition-colors"
+                          className="text-muted-foreground hover:text-foreground min-w-[44px] min-h-[44px] flex items-center justify-center -mr-2 transition-colors focus:outline-none"
                         >
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
@@ -274,7 +278,7 @@ export function RegisterPage() {
                 </div>
 
                 <div className="pt-2">
-                  <Button type="submit" size="lg" className="w-full gap-2 shadow-lg" isLoading={isLoading}>
+                  <Button type="submit" size="lg" className="w-full gap-2 shadow-lg min-h-[44px]" isLoading={isLoading}>
                     <span>Create account</span>
                     <ArrowRight className="w-4 h-4" />
                   </Button>
@@ -284,7 +288,7 @@ export function RegisterPage() {
               <div className="pt-2 text-center border-t border-white/10">
                 <p className="text-xs text-muted-foreground">
                   Already have an account?{' '}
-                  <Link to="/login" className="font-semibold text-primary hover:underline ml-1">
+                  <Link to="/login" className="font-semibold text-primary hover:underline ml-1 min-h-[44px] inline-flex items-center">
                     Sign in
                   </Link>
                 </p>
@@ -295,7 +299,7 @@ export function RegisterPage() {
       </main>
 
       {/* Footer */}
-      <footer className="w-full max-w-7xl mx-auto py-4 text-center text-xs text-muted-foreground/75 z-20">
+      <footer className="w-full max-w-7xl mx-auto py-2 sm:py-4 text-center text-[11px] sm:text-xs text-muted-foreground/75 z-20 shrink-0">
         MeetScribe • High Performance Local Meeting Intelligence
       </footer>
     </div>

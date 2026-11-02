@@ -30,24 +30,36 @@ export const WindowChrome: React.FC<WindowChromeProps> = ({
     >
       {/* macOS Traffic Light Buttons */}
       <div className="flex items-center space-x-2">
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={onClose}
-          className="w-3 h-3 rounded-full bg-[#ff5f57] border border-[#e0443e] hover:brightness-90 transition-all focus:outline-none"
-        />
-        <button
-          type="button"
-          aria-label="Minimize"
-          onClick={onMinimize}
-          className="w-3 h-3 rounded-full bg-[#febc2e] border border-[#d89e24] hover:brightness-90 transition-all focus:outline-none"
-        />
-        <button
-          type="button"
-          aria-label="Maximize"
-          onClick={onMaximize}
-          className="w-3 h-3 rounded-full bg-[#28c840] border border-[#1aab29] hover:brightness-90 transition-all focus:outline-none"
-        />
+        {onClose ? (
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={onClose}
+            className="w-3 h-3 rounded-full bg-[#ff5f57] border border-[#e0443e] hover:brightness-90 transition-all focus:outline-none"
+          />
+        ) : (
+          <div className="w-3 h-3 rounded-full bg-[#ff5f57] border border-[#e0443e]" aria-hidden="true" />
+        )}
+        {onMinimize ? (
+          <button
+            type="button"
+            aria-label="Minimize"
+            onClick={onMinimize}
+            className="w-3 h-3 rounded-full bg-[#febc2e] border border-[#d89e24] hover:brightness-90 transition-all focus:outline-none"
+          />
+        ) : (
+          <div className="w-3 h-3 rounded-full bg-[#febc2e] border border-[#d89e24]" aria-hidden="true" />
+        )}
+        {onMaximize ? (
+          <button
+            type="button"
+            aria-label="Maximize"
+            onClick={onMaximize}
+            className="w-3 h-3 rounded-full bg-[#28c840] border border-[#1aab29] hover:brightness-90 transition-all focus:outline-none"
+          />
+        ) : (
+          <div className="w-3 h-3 rounded-full bg-[#28c840] border border-[#1aab29]" aria-hidden="true" />
+        )}
       </div>
 
       {/* Title / Subtitle */}
