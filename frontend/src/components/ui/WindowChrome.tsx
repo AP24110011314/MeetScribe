@@ -64,12 +64,12 @@ export const WindowChrome: React.FC<WindowChromeProps> = ({
 
       {/* Title / Subtitle */}
       {title && (
-        <div className="flex items-center space-x-1.5 text-muted-foreground truncate max-w-[60%] text-center">
+        <div className="flex-1 min-w-0 mx-2 flex items-center justify-center space-x-1.5 text-muted-foreground truncate text-center">
           <span className="font-medium text-foreground truncate">{title}</span>
           {subtitle && (
             <>
-              <span className="opacity-40">•</span>
-              <span className="truncate opacity-75">{subtitle}</span>
+              <span className="opacity-40 shrink-0 hidden sm:inline">•</span>
+              <span className="truncate opacity-75 shrink-0 hidden sm:inline">{subtitle}</span>
             </>
           )}
         </div>
