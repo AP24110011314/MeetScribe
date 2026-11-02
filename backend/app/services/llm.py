@@ -189,7 +189,15 @@ class GeminiLLMClient:
         model: Optional[str] = None,
     ) -> None:
         self.api_key = api_key or settings.effective_llm_api_key
-        self.model = model or settings.LLM_MODEL
+        raw_model = model or settings.LLM_MODEL
+        # Normalize deprecated models to modern, active Gemini model
+        if raw_model and any(
+            dep in raw_model for dep in ("2.5-flash", "2.0-flash", "1.5-flash", "2.0-flash-lite")
+        ):
+            logger.info("Normalizing deprecated Gemini model '%s' to 'gemini-3.5-flash'", raw_model)
+            self.model = "gemini-3.5-flash"
+        else:
+            self.model = raw_model
         if not self.api_key:
             raise ValueError(
                 "Gemini API key is required. Set LLM_API_KEY (or GEMINI_API_KEY) in .env"
@@ -238,15 +246,16 @@ class GeminiLLMClient:
                 )
                 err_message = str(api_err)
 
-                # If gemini-2.5-flash is 404 (deprecated by Google for new users) -> fallback
+                # If model is 404 or deprecated by Google -> fallback to gemini-3.5-flash
                 if (
                     status_code == 404
-                    and "gemini-2.5-flash" in self.model
-                    and "no longer available" in err_message
-                ):
+                    or "not found" in err_message.lower()
+                    or "no longer available" in err_message.lower()
+                ) and self.model != "gemini-3.5-flash":
                     logger.warning(
-                        "Gemini model %s is no longer available to new users. Falling back to gemini-3.5-flash",
+                        "Gemini model %s is unavailable (%s). Falling back to gemini-3.5-flash",
                         self.model,
+                        err_message,
                     )
                     self.model = "gemini-3.5-flash"
                     continue
@@ -353,7 +362,7 @@ class GeminiLLMClient:
     def complete_text(self, system: str, user: str) -> str:
         try:
             from google import genai
-            from google.genai import types
+            from google.genai import errors, types
         except ImportError as e:
             raise RuntimeError("google-genai package is required for GeminiLLMClient") from e
 
@@ -361,17 +370,39 @@ class GeminiLLMClient:
         config = types.GenerateContentConfig(
             system_instruction=system,
         )
-        response = client.models.generate_content(
-            model=self.model,
-            contents=user,
-            config=config,
-        )
-        return response.text or ""
+        try:
+            response = client.models.generate_content(
+                model=self.model,
+                contents=user,
+                config=config,
+            )
+            return response.text or ""
+        except errors.APIError as api_err:
+            status_code = getattr(api_err, "code", None) or getattr(api_err, "status_code", None)
+            err_msg = str(api_err)
+            if (
+                status_code == 404
+                or "not found" in err_msg.lower()
+                or "no longer available" in err_msg.lower()
+            ) and self.model != "gemini-3.5-flash":
+                logger.warning(
+                    "Gemini complete_text model %s unavailable (%s). Falling back to gemini-3.5-flash",
+                    self.model,
+                    err_msg,
+                )
+                self.model = "gemini-3.5-flash"
+                response = client.models.generate_content(
+                    model=self.model,
+                    contents=user,
+                    config=config,
+                )
+                return response.text or ""
+            raise
 
     def stream_text(self, system: str, user: str) -> Iterator[str]:
         try:
             from google import genai
-            from google.genai import types
+            from google.genai import errors, types
         except ImportError as e:
             raise RuntimeError("google-genai package is required for GeminiLLMClient") from e
 
@@ -379,15 +410,41 @@ class GeminiLLMClient:
         config = types.GenerateContentConfig(
             system_instruction=system,
         )
-        response_stream = client.models.generate_content_stream(
-            model=self.model,
-            contents=user,
-            config=config,
-        )
-        for chunk in response_stream:
-            text = chunk.text or ""
-            if text:
-                yield text
+        try:
+            response_stream = client.models.generate_content_stream(
+                model=self.model,
+                contents=user,
+                config=config,
+            )
+            for chunk in response_stream:
+                text = chunk.text or ""
+                if text:
+                    yield text
+        except errors.APIError as api_err:
+            status_code = getattr(api_err, "code", None) or getattr(api_err, "status_code", None)
+            err_msg = str(api_err)
+            if (
+                status_code == 404
+                or "not found" in err_msg.lower()
+                or "no longer available" in err_msg.lower()
+            ) and self.model != "gemini-3.5-flash":
+                logger.warning(
+                    "Gemini stream_text model %s unavailable (%s). Falling back to gemini-3.5-flash",
+                    self.model,
+                    err_msg,
+                )
+                self.model = "gemini-3.5-flash"
+                response_stream = client.models.generate_content_stream(
+                    model=self.model,
+                    contents=user,
+                    config=config,
+                )
+                for chunk in response_stream:
+                    text = chunk.text or ""
+                    if text:
+                        yield text
+            else:
+                raise
 
 
 class FakeLLMClient:

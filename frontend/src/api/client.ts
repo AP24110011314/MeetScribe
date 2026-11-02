@@ -64,6 +64,47 @@ export function getApiUrl(path: string): string {
   return API_BASE_URL ? `${API_BASE_URL}/api/v1${normalizedPath}` : `/api/v1${normalizedPath}`;
 }
 
+export async function refreshAccessToken(): Promise<string> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    clearTokens();
+    window.dispatchEvent(new Event('auth:unauthorized'));
+    throw new Error('No refresh token available');
+  }
+
+  if (isRefreshing) {
+    return new Promise<string>((resolve) => {
+      subscribeTokenRefresh((newToken) => resolve(newToken));
+    });
+  }
+
+  isRefreshing = true;
+  try {
+    const refreshRes = await fetch(getApiUrl('/api/v1/auth/refresh'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (!refreshRes.ok) {
+      clearTokens();
+      window.dispatchEvent(new Event('auth:unauthorized'));
+      throw new Error('Session expired. Please log in again.');
+    }
+
+    const newTokens: AuthTokens = await refreshRes.json();
+    setTokens(newTokens);
+    isRefreshing = false;
+    onRefreshed(newTokens.access_token);
+    return newTokens.access_token;
+  } catch (err) {
+    isRefreshing = false;
+    clearTokens();
+    window.dispatchEvent(new Event('auth:unauthorized'));
+    throw err;
+  }
+}
+
 export async function apiFetch<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -79,62 +120,17 @@ export async function apiFetch<T>(
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(url, { ...options, headers });
+  let response = await fetch(url, { ...options, headers });
 
   // If unauthorized and we have a refresh token, attempt token refresh once
   if (response.status === 401 && getRefreshToken() && !endpoint.includes('/auth/refresh') && !endpoint.includes('/auth/login')) {
-    if (!isRefreshing) {
-      isRefreshing = true;
-      try {
-        const refreshToken = getRefreshToken();
-        const refreshRes = await fetch(getApiUrl('/api/v1/auth/refresh'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token: refreshToken }),
-        });
-
-        if (!refreshRes.ok) {
-          clearTokens();
-          window.dispatchEvent(new Event('auth:unauthorized'));
-          throw new Error('Session expired. Please log in again.');
-        }
-
-        const newTokens: AuthTokens = await refreshRes.json();
-        setTokens(newTokens);
-        isRefreshing = false;
-        onRefreshed(newTokens.access_token);
-      } catch (err) {
-        isRefreshing = false;
-        clearTokens();
-        window.dispatchEvent(new Event('auth:unauthorized'));
-        throw err;
-      }
+    try {
+      const newToken = await refreshAccessToken();
+      headers.set('Authorization', `Bearer ${newToken}`);
+      response = await fetch(url, { ...options, headers });
+    } catch {
+      // already handled in refreshAccessToken
     }
-
-    // Wait for the new token and retry the original request
-    const retryPromise = new Promise<T>((resolve, reject) => {
-      subscribeTokenRefresh(async (newToken) => {
-        try {
-          headers.set('Authorization', `Bearer ${newToken}`);
-          const retryRes = await fetch(url, { ...options, headers });
-          if (!retryRes.ok) {
-            const errBody = await retryRes.json().catch(() => ({}));
-            reject(new Error(errBody.detail || `Request failed with status ${retryRes.status}`));
-            return;
-          }
-          if (retryRes.status === 204) {
-            resolve({} as T);
-            return;
-          }
-          const data = await retryRes.json();
-          resolve(data);
-        } catch (e) {
-          reject(e);
-        }
-      });
-    });
-
-    return retryPromise;
   }
 
   if (!response.ok) {
@@ -159,4 +155,48 @@ export async function apiFetch<T>(
   }
 
   return response.json();
+}
+
+export async function apiFetchBlob(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<Blob> {
+  const url = getApiUrl(endpoint);
+
+  const headers = new Headers(options.headers || {});
+  const token = getAccessToken();
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  let response = await fetch(url, { ...options, headers });
+
+  if (response.status === 401 && getRefreshToken() && !endpoint.includes('/auth/refresh') && !endpoint.includes('/auth/login')) {
+    try {
+      const newToken = await refreshAccessToken();
+      headers.set('Authorization', `Bearer ${newToken}`);
+      response = await fetch(url, { ...options, headers });
+    } catch {
+      // already handled
+    }
+  }
+
+  if (!response.ok) {
+    let errorDetail = `Export failed with status ${response.status}`;
+    try {
+      const errBody = await response.json();
+      if (errBody && errBody.detail) {
+        if (typeof errBody.detail === 'string') {
+          errorDetail = errBody.detail;
+        } else if (Array.isArray(errBody.detail) && errBody.detail.length > 0) {
+          errorDetail = errBody.detail[0].msg || JSON.stringify(errBody.detail[0]);
+        }
+      }
+    } catch {
+      // not JSON
+    }
+    throw new Error(errorDetail);
+  }
+
+  return response.blob();
 }

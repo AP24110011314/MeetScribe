@@ -33,6 +33,7 @@ import {
   Link as LinkIcon,
   Lock,
   ChevronDown,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -43,7 +44,7 @@ import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Avatar } from '@/components/ui/Avatar';
 import { WindowChrome } from '@/components/ui/WindowChrome';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/Dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/Dialog';
 import { useToast } from '@/components/ui/Toast';
 import {
   createMeetingActionItem,
@@ -85,7 +86,7 @@ import {
   TranscriptData,
   TranslatedNotesData,
 } from '@/types/meeting';
-import { cn } from '@/lib/utils';
+import { cn, copyToClipboard } from '@/lib/utils';
 
 export function MeetingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -173,6 +174,21 @@ export function MeetingDetailPage() {
 
   // Phase C: Export Formats Dropdown state
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setIsExportMenuOpen(false);
+      }
+    };
+    if (isExportMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isExportMenuOpen]);
 
   useEffect(() => {
     if (!id) return;
@@ -306,12 +322,12 @@ export function MeetingDetailPage() {
     }
   };
 
-  const handleCopyText = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
+  const handleCopyText = async (text: string, label: string) => {
+    await copyToClipboard(text);
     toast({ type: 'success', title: 'Copied', description: `${label} copied to clipboard` });
   };
 
-  const handleCopyAllMarkdown = () => {
+  const handleCopyAllMarkdown = async () => {
     if (!meeting) return;
     let md = `# ${meeting.title}\n\n`;
     if (meeting.summary) {
@@ -326,7 +342,7 @@ export function MeetingDetailPage() {
     if (meeting.action_items?.length) {
       md += `## Action Items\n\n` + meeting.action_items.map((i) => `- [ ] **${i.description}** (${i.owner || 'Unassigned'}, Priority: ${i.priority})`).join('\n') + '\n\n';
     }
-    navigator.clipboard.writeText(md);
+    await copyToClipboard(md);
     toast({ type: 'success', title: 'Copied All', description: 'Full meeting notes copied as Markdown' });
   };
 
@@ -382,8 +398,9 @@ export function MeetingDetailPage() {
       await exportMeetingNotes(id, format);
       setIsExportMenuOpen(false);
       toast({ type: 'success', title: 'Exported', description: `Saved as ${format.toUpperCase()}` });
-    } catch {
-      toast({ type: 'error', title: 'Export failed' });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Export failed';
+      toast({ type: 'error', title: 'Export failed', description: msg });
     }
   };
 
@@ -411,8 +428,8 @@ export function MeetingDetailPage() {
       setNewlyCreatedUrl(fullUrl);
       setShareLinks((prev) => [created, ...prev]);
       setSharePassword('');
+      await copyToClipboard(fullUrl);
       toast({ type: 'success', title: 'Share link created', description: 'Link copied to clipboard!' });
-      navigator.clipboard.writeText(fullUrl);
     } catch {
       toast({ type: 'error', title: 'Error', description: 'Failed to create share link' });
     } finally {
@@ -776,168 +793,186 @@ export function MeetingDetailPage() {
               </div>
             </div>
 
-            {/* AI and Export Actions */}
-            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-white/5">
-              <select
-                data-testid="template-select"
-                value={meeting.template || 'general'}
-                onChange={(e) => handleTemplateChange(e.target.value)}
-                disabled={isRegenerating}
-                className="h-8 px-2.5 text-xs font-semibold rounded-xl border border-white/20 bg-background/60 backdrop-blur-sm cursor-pointer outline-none focus:ring-1 focus:ring-primary"
-                title="Change note template"
-              >
-                <option value="general">Template: General</option>
-                <option value="standup">Template: Daily Standup</option>
-                <option value="one_on_one">Template: 1:1 Review</option>
-                <option value="sales">Template: Sales Discovery</option>
-                <option value="interview">Template: Interview</option>
-                <option value="lecture">Template: Lecture / Study</option>
-              </select>
+            {/* AI and Export Actions Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/10">
+              {/* Group 1: Note Presets & AI Intelligence */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5 bg-background/50 backdrop-blur-md px-2.5 py-1 rounded-2xl border border-white/15 shadow-sm">
+                  <select
+                    data-testid="template-select"
+                    value={meeting.template || 'general'}
+                    onChange={(e) => handleTemplateChange(e.target.value)}
+                    disabled={isRegenerating}
+                    className="h-6 text-xs font-semibold bg-transparent cursor-pointer outline-none focus:ring-0 border-none text-foreground"
+                    title="Change note template"
+                  >
+                    <option value="general" className="bg-popover text-popover-foreground">Template: General</option>
+                    <option value="standup" className="bg-popover text-popover-foreground">Template: Daily Standup</option>
+                    <option value="one_on_one" className="bg-popover text-popover-foreground">Template: 1:1 Review</option>
+                    <option value="sales" className="bg-popover text-popover-foreground">Template: Sales Discovery</option>
+                    <option value="interview" className="bg-popover text-popover-foreground">Template: Interview</option>
+                    <option value="lecture" className="bg-popover text-popover-foreground">Template: Lecture / Study</option>
+                  </select>
+                  <div className="h-3.5 w-px bg-white/20" />
+                  <select
+                    data-testid="translate-select"
+                    value={activeLanguage}
+                    onChange={(e) => handleTranslate(e.target.value)}
+                    disabled={isLoadingTranslation}
+                    className="h-6 text-xs font-semibold bg-transparent cursor-pointer outline-none focus:ring-0 border-none text-foreground"
+                    title="Translate notes"
+                  >
+                    <option value="en" className="bg-popover text-popover-foreground">Translate: English</option>
+                    <option value="es" className="bg-popover text-popover-foreground">Translate: Español</option>
+                    <option value="fr" className="bg-popover text-popover-foreground">Translate: Français</option>
+                    <option value="de" className="bg-popover text-popover-foreground">Translate: Deutsch</option>
+                    <option value="hi" className="bg-popover text-popover-foreground">Translate: हिन्दी</option>
+                    <option value="ja" className="bg-popover text-popover-foreground">Translate: 日本語</option>
+                  </select>
+                </div>
 
-              <select
-                data-testid="translate-select"
-                value={activeLanguage}
-                onChange={(e) => handleTranslate(e.target.value)}
-                disabled={isLoadingTranslation}
-                className="h-8 px-2.5 text-xs font-semibold rounded-xl border border-white/20 bg-background/60 backdrop-blur-sm cursor-pointer outline-none focus:ring-1 focus:ring-primary"
-                title="Translate notes"
-              >
-                <option value="en">Translate: English</option>
-                <option value="es">Translate: Español</option>
-                <option value="fr">Translate: Français</option>
-                <option value="de">Translate: Deutsch</option>
-                <option value="hi">Translate: हिन्दी</option>
-                <option value="ja">Translate: 日本語</option>
-              </select>
-
-              <Button
-                data-testid="email-draft-btn"
-                variant="glass"
-                size="sm"
-                onClick={() => handleOpenEmailModal()}
-                className="gap-1.5 text-xs"
-              >
-                <Mail className="h-3.5 w-3.5" />
-                <span>Email</span>
-              </Button>
-
-              <Button
-                variant="glass"
-                size="sm"
-                onClick={handleOpenInsights}
-                className="gap-1.5 text-xs"
-              >
-                <BarChart2 className="h-3.5 w-3.5" />
-                <span>Insights</span>
-              </Button>
-
-              <Button
-                data-testid="ask-ai-btn"
-                variant="default"
-                size="sm"
-                onClick={() => setIsChatOpen(true)}
-                className="gap-1.5 text-xs shadow-md shadow-primary/20"
-              >
-                <MessageSquare className="h-3.5 w-3.5" />
-                <span>Ask AI</span>
-              </Button>
-
-              <Button variant="glass" size="sm" onClick={handleCopyAllMarkdown} className="gap-1.5 text-xs">
-                <Copy className="h-3.5 w-3.5" />
-                <span>Copy</span>
-              </Button>
-              <Button
-                data-testid="export-md"
-                variant="glass"
-                size="sm"
-                onClick={() => handleExport('md')}
-                className="gap-1.5 text-xs"
-              >
-                <Download className="h-3.5 w-3.5" />
-                <span>MD</span>
-              </Button>
-              <Button
-                data-testid="export-pdf"
-                variant="glass"
-                size="sm"
-                onClick={() => handleExport('pdf')}
-                className="gap-1.5 text-xs"
-              >
-                <Download className="h-3.5 w-3.5" />
-                <span>PDF</span>
-              </Button>
-
-              {/* More Export Formats Dropdown */}
-              <div className="relative">
                 <Button
-                  data-testid="export-more-btn"
+                  data-testid="ask-ai-btn"
+                  variant="default"
+                  size="sm"
+                  onClick={() => setIsChatOpen(true)}
+                  className="h-8 gap-1.5 text-xs font-semibold shadow-sm"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  <span>Ask AI</span>
+                </Button>
+
+                <Button
+                  data-testid="email-draft-btn"
                   variant="glass"
                   size="sm"
-                  onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
-                  className="gap-1 text-xs"
+                  onClick={() => handleOpenEmailModal()}
+                  className="h-8 gap-1.5 text-xs"
                 >
-                  <span>More</span>
-                  <ChevronDown className="h-3 w-3 opacity-70" />
+                  <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>Email</span>
                 </Button>
-                {isExportMenuOpen && (
-                  <div className="absolute right-0 top-full mt-1.5 w-36 py-1.5 rounded-xl glass-card border border-white/20 shadow-xl z-50 flex flex-col">
-                    <button
-                      data-testid="export-docx"
-                      onClick={() => handleExport('docx')}
-                      className="px-3 py-1.5 text-left text-xs hover:bg-white/10 flex items-center justify-between"
-                    >
-                      Word (.docx)
-                    </button>
-                    <button
-                      data-testid="export-txt"
-                      onClick={() => handleExport('txt')}
-                      className="px-3 py-1.5 text-left text-xs hover:bg-white/10 flex items-center justify-between"
-                    >
-                      Text (.txt)
-                    </button>
-                    <button
-                      data-testid="export-json"
-                      onClick={() => handleExport('json')}
-                      className="px-3 py-1.5 text-left text-xs hover:bg-white/10 flex items-center justify-between"
-                    >
-                      JSON (.json)
-                    </button>
-                    <button
-                      data-testid="export-srt"
-                      onClick={() => handleExport('srt')}
-                      className="px-3 py-1.5 text-left text-xs hover:bg-white/10 flex items-center justify-between"
-                    >
-                      Subtitles (.srt)
-                    </button>
-                    <button
-                      data-testid="export-vtt"
-                      onClick={() => handleExport('vtt')}
-                      className="px-3 py-1.5 text-left text-xs hover:bg-white/10 flex items-center justify-between"
-                    >
-                      WebVTT (.vtt)
-                    </button>
-                    <button
-                      data-testid="export-ics"
-                      onClick={() => handleExport('ics')}
-                      className="px-3 py-1.5 text-left text-xs hover:bg-white/10 flex items-center justify-between"
-                    >
-                      Calendar (.ics)
-                    </button>
-                  </div>
-                )}
+
+                <Button
+                  variant="glass"
+                  size="sm"
+                  onClick={handleOpenInsights}
+                  className="h-8 gap-1.5 text-xs"
+                >
+                  <BarChart2 className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>Insights</span>
+                </Button>
               </div>
 
-              {/* Share Button */}
-              <Button
-                data-testid="share-btn"
-                variant="glass"
-                size="sm"
-                onClick={handleOpenShare}
-                className="gap-1.5 text-xs border border-primary/30"
-              >
-                <Share2 className="h-3.5 w-3.5 text-primary" />
-                <span>Share</span>
-              </Button>
+              {/* Group 2: Copy, Export Formats & Sharing */}
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="glass"
+                  size="sm"
+                  onClick={handleCopyAllMarkdown}
+                  className="h-8 gap-1.5 text-xs"
+                  title="Copy full notes as Markdown"
+                >
+                  <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>Copy</span>
+                </Button>
+
+                <Button
+                  data-testid="export-md"
+                  variant="glass"
+                  size="sm"
+                  onClick={() => handleExport('md')}
+                  className="h-8 gap-1.5 text-xs"
+                  title="Download Markdown"
+                >
+                  <Download className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>MD</span>
+                </Button>
+
+                <Button
+                  data-testid="export-pdf"
+                  variant="glass"
+                  size="sm"
+                  onClick={() => handleExport('pdf')}
+                  className="h-8 gap-1.5 text-xs"
+                  title="Download PDF"
+                >
+                  <Download className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>PDF</span>
+                </Button>
+
+                {/* More Export Formats Dropdown */}
+                <div className="relative" ref={exportMenuRef}>
+                  <Button
+                    data-testid="export-more-btn"
+                    variant="glass"
+                    size="sm"
+                    onClick={() => setIsExportMenuOpen(!isExportMenuOpen)}
+                    className="h-8 gap-1 text-xs"
+                  >
+                    <span>More</span>
+                    <ChevronDown className="h-3 w-3 opacity-70" />
+                  </Button>
+                  {isExportMenuOpen && (
+                    <div className="absolute right-0 top-full mt-1.5 w-40 py-1.5 rounded-2xl glass-card border border-white/20 shadow-2xl z-50 flex flex-col bg-background/95 backdrop-blur-xl">
+                      <button
+                        data-testid="export-docx"
+                        onClick={() => handleExport('docx')}
+                        className="px-3.5 py-2 text-left text-xs hover:bg-white/10 transition-colors flex items-center justify-between text-foreground"
+                      >
+                        Word (.docx)
+                      </button>
+                      <button
+                        data-testid="export-txt"
+                        onClick={() => handleExport('txt')}
+                        className="px-3.5 py-2 text-left text-xs hover:bg-white/10 transition-colors flex items-center justify-between text-foreground"
+                      >
+                        Text (.txt)
+                      </button>
+                      <button
+                        data-testid="export-json"
+                        onClick={() => handleExport('json')}
+                        className="px-3.5 py-2 text-left text-xs hover:bg-white/10 transition-colors flex items-center justify-between text-foreground"
+                      >
+                        JSON (.json)
+                      </button>
+                      <button
+                        data-testid="export-srt"
+                        onClick={() => handleExport('srt')}
+                        className="px-3.5 py-2 text-left text-xs hover:bg-white/10 transition-colors flex items-center justify-between text-foreground"
+                      >
+                        Subtitles (.srt)
+                      </button>
+                      <button
+                        data-testid="export-vtt"
+                        onClick={() => handleExport('vtt')}
+                        className="px-3.5 py-2 text-left text-xs hover:bg-white/10 transition-colors flex items-center justify-between text-foreground"
+                      >
+                        WebVTT (.vtt)
+                      </button>
+                      <button
+                        data-testid="export-ics"
+                        onClick={() => handleExport('ics')}
+                        className="px-3.5 py-2 text-left text-xs hover:bg-white/10 transition-colors flex items-center justify-between text-foreground"
+                      >
+                        Calendar (.ics)
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Share Button */}
+                <Button
+                  data-testid="share-btn"
+                  variant="glass"
+                  size="sm"
+                  onClick={handleOpenShare}
+                  className="h-8 gap-1.5 text-xs border border-primary/40 text-primary hover:bg-primary/10"
+                >
+                  <Share2 className="h-3.5 w-3.5" />
+                  <span>Share</span>
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -1617,12 +1652,14 @@ export function MeetingDetailPage() {
 
       {/* Ask Meeting Chat Drawer / Dialog (U15) */}
       <Dialog open={isChatOpen} onOpenChange={setIsChatOpen}>
-        <DialogContent data-testid="chat-drawer" className="max-w-xl h-[85vh] max-h-[700px] flex flex-col glass-card border border-white/20 p-0 overflow-hidden">
-          <div className="p-4 border-b border-white/10 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Bot className="h-5 w-5 text-primary" />
+        <DialogContent data-testid="chat-drawer" className="max-w-xl h-[85vh] max-h-[720px] flex flex-col p-0 overflow-hidden">
+          <div className="p-4 border-b border-white/10 flex items-center justify-between pr-12">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-primary/20 text-primary flex items-center justify-center shrink-0">
+                <Bot className="h-4 w-4" />
+              </div>
               <div>
-                <h3 className="text-sm font-bold">Ask this Meeting</h3>
+                <h3 className="text-sm font-bold text-foreground">Ask this Meeting</h3>
                 <p className="text-[11px] text-muted-foreground">Answers grounded in meeting transcript with timestamp citations</p>
               </div>
             </div>
@@ -1725,15 +1762,18 @@ export function MeetingDetailPage() {
 
       {/* Follow-Up Email Modal (U18) */}
       <Dialog open={isEmailModalOpen} onOpenChange={setIsEmailModalOpen}>
-        <DialogContent className="max-w-lg glass-card border border-white/20">
-          <DialogHeader>
+        <DialogContent className="max-w-lg p-6 space-y-4">
+          <DialogHeader className="pr-8">
             <DialogTitle className="flex items-center gap-2">
               <Mail className="h-5 w-5 text-primary" />
               <span>Follow-Up Email Draft</span>
             </DialogTitle>
+            <DialogDescription className="text-xs">
+              Generated summary and action items ready to send to participants
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 pt-2">
+          <div className="space-y-4 pt-1">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-muted-foreground">Tone:</span>
               {(['formal', 'friendly', 'brief'] as const).map((t) => (
@@ -1744,8 +1784,8 @@ export function MeetingDetailPage() {
                   className={cn(
                     'px-3 py-1 rounded-xl text-xs font-medium capitalize transition-all border',
                     emailTone === t
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'glass-card-subtle text-muted-foreground border-white/10 hover:text-foreground'
+                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                      : 'glass-card-subtle text-muted-foreground border-white/10 hover:text-foreground hover:bg-white/10'
                   )}
                 >
                   {t}
@@ -1754,21 +1794,25 @@ export function MeetingDetailPage() {
             </div>
 
             {isLoadingEmail ? (
-              <div className="p-12 text-center text-xs text-muted-foreground">Generating email draft...</div>
+              <div className="p-12 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <span>Generating email draft...</span>
+              </div>
             ) : emailData ? (
               <div className="space-y-3">
-                <div className="p-3 rounded-xl glass-card-subtle border border-white/10 text-xs">
+                <div className="p-3 rounded-2xl glass-card-subtle border border-white/10 text-xs">
                   <span className="font-bold text-muted-foreground">Subject: </span>
-                  <span className="text-foreground">{emailData.subject}</span>
+                  <span className="text-foreground font-medium">{emailData.subject}</span>
                 </div>
-                <div className="p-4 rounded-xl glass-card border border-white/10 text-xs whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto">
+                <div className="p-4 rounded-2xl glass-card border border-white/10 text-xs whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto bg-background/50">
                   {emailData.body}
                 </div>
-                <div className="flex justify-end gap-2 pt-2">
+                <div className="flex justify-end gap-2 pt-1">
                   <Button
                     size="sm"
-                    onClick={() => {
-                      navigator.clipboard.writeText(`Subject: ${emailData.subject}\n\n${emailData.body}`);
+                    onClick={async () => {
+                      const text = `Subject: ${emailData.subject}\n\n${emailData.body}`;
+                      await copyToClipboard(text);
                       toast({ type: 'success', title: 'Copied email to clipboard' });
                     }}
                     className="gap-1.5"
@@ -1787,25 +1831,31 @@ export function MeetingDetailPage() {
 
       {/* Meeting Insights Modal */}
       <Dialog open={isInsightsOpen} onOpenChange={setIsInsightsOpen}>
-        <DialogContent className="max-w-lg glass-card border border-white/20">
-          <DialogHeader>
+        <DialogContent className="max-w-lg p-6 space-y-4">
+          <DialogHeader className="pr-8">
             <DialogTitle className="flex items-center gap-2">
               <BarChart2 className="h-5 w-5 text-primary" />
               <span>Meeting Analytics & Insights</span>
             </DialogTitle>
+            <DialogDescription className="text-xs">
+              Speaking pace, sentiment analysis, top keywords, and unresolved questions
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 pt-2">
+          <div className="space-y-4 pt-1">
             {isLoadingInsights ? (
-              <div className="p-12 text-center text-xs text-muted-foreground">Computing conversation insights...</div>
+              <div className="p-12 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <span>Computing conversation insights...</span>
+              </div>
             ) : insightsData ? (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3.5 rounded-2xl glass-card border border-white/10 text-center">
+                  <div className="p-3.5 rounded-2xl glass-card-subtle border border-white/10 text-center">
                     <div className="text-[11px] text-muted-foreground font-semibold uppercase">Overall Sentiment</div>
                     <div className="text-lg font-extrabold capitalize text-primary mt-1">{insightsData.sentiment}</div>
                   </div>
-                  <div className="p-3.5 rounded-2xl glass-card border border-white/10 text-center">
+                  <div className="p-3.5 rounded-2xl glass-card-subtle border border-white/10 text-center">
                     <div className="text-[11px] text-muted-foreground font-semibold uppercase">Speaking Pace</div>
                     <div className="text-lg font-extrabold text-foreground mt-1">
                       {insightsData.pace_wpm} <span className="text-xs font-normal text-muted-foreground">WPM</span>
@@ -1818,7 +1868,7 @@ export function MeetingDetailPage() {
                     <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Top Keywords & Topics</div>
                     <div className="flex flex-wrap gap-1.5">
                       {insightsData.top_keywords.map((kw, i) => (
-                        <span key={i} className="px-2.5 py-1 rounded-full text-xs font-medium glass-card border border-white/10 text-foreground">
+                        <span key={i} className="px-2.5 py-1 rounded-full text-xs font-medium glass-card-subtle border border-white/10 text-foreground">
                           {kw}
                         </span>
                       ))}
@@ -1841,19 +1891,23 @@ export function MeetingDetailPage() {
           </div>
         </DialogContent>
       </Dialog>
+
       {/* Public Share Modal */}
       <Dialog open={isShareOpen} onOpenChange={setIsShareOpen}>
-        <DialogContent className="max-w-md glass-card border border-white/20 p-6 space-y-4" data-testid="share-modal">
-          <DialogHeader>
+        <DialogContent className="max-w-md p-6 space-y-4" data-testid="share-modal">
+          <DialogHeader className="pr-8">
             <DialogTitle className="flex items-center gap-2 text-base font-semibold">
               <Share2 className="h-5 w-5 text-primary" />
               <span>Public Share Links</span>
             </DialogTitle>
+            <DialogDescription className="text-xs">
+              Share meeting summary and notes with anyone via view-only links
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 pt-1">
             {/* Create Share Link Card */}
-            <div className="p-4 rounded-xl glass-card-subtle border border-white/10 space-y-3">
+            <div className="p-4 rounded-2xl glass-card-subtle border border-white/10 space-y-3">
               <div className="text-xs font-semibold text-foreground/90">Create New Share Link</div>
 
               <div className="grid grid-cols-2 gap-2 text-xs">
@@ -1862,11 +1916,11 @@ export function MeetingDetailPage() {
                   <select
                     value={shareExpiresInDays ?? ''}
                     onChange={(e) => setShareExpiresInDays(e.target.value ? Number(e.target.value) : null)}
-                    className="w-full px-2.5 py-1.5 rounded-lg glass-card text-xs border border-white/15 bg-transparent text-foreground focus:outline-none"
+                    className="w-full px-2.5 py-1.5 rounded-xl glass-card-subtle text-xs border border-white/15 bg-background text-foreground focus:outline-none"
                   >
-                    <option value="" className="bg-slate-900 text-white">Never</option>
-                    <option value="7" className="bg-slate-900 text-white">7 Days</option>
-                    <option value="30" className="bg-slate-900 text-white">30 Days</option>
+                    <option value="" className="bg-popover text-popover-foreground">Never</option>
+                    <option value="7" className="bg-popover text-popover-foreground">7 Days</option>
+                    <option value="30" className="bg-popover text-popover-foreground">30 Days</option>
                   </select>
                 </div>
                 <div>
@@ -1904,7 +1958,7 @@ export function MeetingDetailPage() {
 
             {/* Generated / Active Links */}
             {newlyCreatedUrl && (
-              <div className="space-y-1.5 p-3 rounded-xl bg-primary/10 border border-primary/20">
+              <div className="space-y-1.5 p-3 rounded-2xl bg-primary/10 border border-primary/20">
                 <div className="text-[11px] font-semibold text-primary">New Link Ready</div>
                 <div className="flex gap-2">
                   <Input
@@ -1916,8 +1970,8 @@ export function MeetingDetailPage() {
                   <Button
                     size="sm"
                     variant="glass"
-                    onClick={() => {
-                      navigator.clipboard.writeText(newlyCreatedUrl);
+                    onClick={async () => {
+                      await copyToClipboard(newlyCreatedUrl);
                       toast({ type: 'success', title: 'Copied link to clipboard' });
                     }}
                     className="h-8 text-xs shrink-0"
@@ -1938,7 +1992,7 @@ export function MeetingDetailPage() {
                   {shareLinks.map((link) => (
                     <div
                       key={link.id}
-                      className="p-2.5 rounded-xl glass-card border border-white/10 flex items-center justify-between text-xs gap-2"
+                      className="p-2.5 rounded-xl glass-card-subtle border border-white/10 flex items-center justify-between text-xs gap-2"
                     >
                       <div className="min-w-0 flex-1 space-y-0.5">
                         <div className="flex items-center gap-1.5 font-mono text-[11px] truncate text-foreground/90">
@@ -1953,9 +2007,9 @@ export function MeetingDetailPage() {
                         <Button
                           size="sm"
                           variant="glass"
-                          onClick={() => {
+                          onClick={async () => {
                             const url = `${window.location.origin}/share/${link.token}`;
-                            navigator.clipboard.writeText(url);
+                            await copyToClipboard(url);
                             toast({ type: 'success', title: 'Copied link' });
                           }}
                           className="h-7 px-2 text-xs"

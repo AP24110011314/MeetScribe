@@ -1,4 +1,4 @@
-import { apiFetch, getApiUrl } from './client';
+import { apiFetch, apiFetchBlob, getAccessToken, getApiUrl, refreshAccessToken } from './client';
 import {
   ActionItemData,
   AudioUrlData,
@@ -176,16 +176,7 @@ export async function exportMeetingNotes(
   id: string,
   format: 'md' | 'pdf' | 'docx' | 'txt' | 'json' | 'srt' | 'vtt' | 'ics' | string
 ): Promise<void> {
-  const token = localStorage.getItem('meetscribe_access_token');
-  const res = await fetch(getApiUrl(`/api/v1/meetings/${id}/export?format=${format}`), {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-
-  if (!res.ok) {
-    throw new Error(`Export failed with status ${res.status}`);
-  }
-
-  const blob = await res.blob();
+  const blob = await apiFetchBlob(`/meetings/${id}/export?format=${format}`);
   const url = window.URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -360,8 +351,10 @@ export async function streamMeetingChat(
   onToken: (token: string) => void,
   onDone: (citations: CitationData[]) => void
 ): Promise<void> {
-  const token = localStorage.getItem('meetscribe_access_token');
-  const res = await fetch(getApiUrl(`/api/v1/meetings/${meetingId}/chat`), {
+  const token = getAccessToken();
+  const url = getApiUrl(`/api/v1/meetings/${meetingId}/chat`);
+
+  let res = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -370,8 +363,33 @@ export async function streamMeetingChat(
     body: JSON.stringify({ message }),
   });
 
+  if (res.status === 401 && getAccessToken()) {
+    try {
+      const newToken = await refreshAccessToken();
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${newToken}`,
+        },
+        body: JSON.stringify({ message }),
+      });
+    } catch {
+      // already handled
+    }
+  }
+
   if (!res.ok) {
-    throw new Error(`Chat error: status ${res.status}`);
+    let msg = `Chat error: status ${res.status}`;
+    try {
+      const errJson = await res.json();
+      if (errJson && errJson.detail) {
+        msg = errJson.detail;
+      }
+    } catch {
+      // not JSON
+    }
+    throw new Error(msg);
   }
 
   const reader = res.body?.getReader();
