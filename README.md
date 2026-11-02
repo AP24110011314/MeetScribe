@@ -26,6 +26,53 @@ Runs directly on macOS (no Docker). API on **http://localhost:8000**, web app on
 - Action items in list or kanban board view, global "My action items" page
 - Fully responsive (360px to 1440px+) and keyboard accessible
 
+  
+## 📸 Screenshots
+
+### 1. Login & Dashboard
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="screenshots/login.png" alt="Login Page" width="100%">
+      <p align="center"><b>Login Page</b></p>
+    </td>
+    <td width="50%">
+      <img src="screenshots/dashboard.png" alt="Dashboard" width="100%">
+      <p align="center"><b>Dashboard</b></p>
+    </td>
+  </tr>
+</table>
+
+### 2. Upload & Notes
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="screenshots/upload.png" alt="Upload Page" width="100%">
+      <p align="center"><b>Upload Page</b></p>
+    </td>
+    <td width="50%">
+      <img src="screenshots/notes.png" alt="Notes Page" width="100%">
+      <p align="center"><b>Notes Page</b></p>
+    </td>
+  </tr>
+</table>
+
+### 3. Settings & Meeting
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="screenshots/setting.png" alt="Settings Page" width="100%">
+      <p align="center"><b>Settings Page</b></p>
+    </td>
+    <td width="50%">
+      <img src="screenshots/meeting.png" alt="Meeting Page" width="100%">
+      <p align="center"><b>Meeting Page</b></p>
+    </td>
+  </tr>
+</table>
 ## Architecture
 ```
 Browser ──PUT (presigned)──▶ MinIO / S3                (localhost:9000)
